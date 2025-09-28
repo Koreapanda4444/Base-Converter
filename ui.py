@@ -1,122 +1,266 @@
-# ui.py
-
 import customtkinter as ctk
-from constants import Base_options
-from logic import calculate, convert_result_to_bases, to_int
+import tkinter as tk
+from tkinter import messagebox, Listbox, END, Scrollbar
+import re
+
+import ui_text as T
+from history import HistoryStore
+from converter import convert, to_decimal, from_decimal, evaluate_expression
 
 
-class BaseConverterApp(ctk.CTk):
+MIN_W, MIN_H = 900, 560
+MAX_W, MAX_H = 1600, 1000
+
+
+class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("진법 계산기 / 변환기")
-        self.geometry("500x550")
-        ctk.set_appearance_mode("dark")
+        ctk.set_appearance_mode("system")
         ctk.set_default_color_theme("blue")
 
-        self.tabview = ctk.CTkTabview(self, width=480)
-        self.tabview.pack(pady=20, expand=True)
+        self.title(T.APP_TITLE)
+        self._init_window_size()
+        self.hist = HistoryStore()
+        self._build_top_controls()
+        self._build_resizable_panes()
+        self._init_hint()
+        self.after(100, self._hist_refresh)   # ✅ UI 다 뜬 뒤에 실행
 
-        self.calculator_tab = self.tabview.add("진법 계산기")
-        self.converter_tab = self.tabview.add("진법 변환기")
+    # ---------------- Window sizing ----------------
+    def _init_window_size(self):
+        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+        gw, gh = int(sw * 0.60), int(sh * 0.65)
+        gw = max(MIN_W, min(gw, MAX_W))
+        gh = max(MIN_H, min(gh, MAX_H))
+        x, y = (sw - gw) // 2, (sh - gh) // 2
+        self.geometry(f"{gw}x{gh}+{x}+{y}")
+        self.minsize(MIN_W, MIN_H)
 
-        self.build_calculator_tab()
-        self.build_converter_tab()
+    # ---------------- TOP: 입력/진법/버튼 ----------------
+    def _build_top_controls(self):
+        top = ctk.CTkFrame(self)
+        top.pack(side="top", fill="x", padx=12, pady=(12, 8))
 
-    def build_calculator_tab(self):
-        self.base1_var = ctk.StringVar(value=Base_options[2])
-        self.base2_var = ctk.StringVar(value=Base_options[2])
+        ctk.CTkLabel(top, text=T.LBL_INPUT).grid(row=0, column=0, sticky="w")
+        self.var_input = ctk.StringVar(value="")
+        self.ent_input = ctk.CTkEntry(
+            top, textvariable=self.var_input, placeholder_text="예: 1011.01  또는  A.F + 10"
+        )
+        self.ent_input.grid(row=1, column=0, columnspan=8, sticky="ew", pady=(2, 8))
 
-        ctk.CTkLabel(self.calculator_tab, text="진법 선택").pack(pady=2)
-        self.base1_menu = ctk.CTkOptionMenu(self.calculator_tab, values=Base_options, variable=self.base1_var)
-        self.base1_menu.pack()
+        ctk.CTkLabel(top, text=T.LBL_FROM).grid(row=2, column=0, sticky="w")
+        self.var_from = ctk.StringVar(value="10")
+        self.cmb_from = ctk.CTkComboBox(top, values=T.BASES, variable=self.var_from, width=100)
+        self.cmb_from.grid(row=3, column=0, sticky="w")
 
-        self.input1 = ctk.CTkEntry(self.calculator_tab, placeholder_text="값 입력")
-        self.input1.pack(pady=5)
+        ctk.CTkLabel(top, text=T.LBL_TO).grid(row=2, column=1, sticky="w")
+        self.var_to = ctk.StringVar(value="2")
+        self.cmb_to = ctk.CTkComboBox(top, values=T.BASES, variable=self.var_to, width=100)
+        self.cmb_to.grid(row=3, column=1, sticky="w", padx=(6, 0))
 
-        self.operator_var = ctk.StringVar(value="+")
-        ctk.CTkLabel(self.calculator_tab, text="값 입력").pack(pady=2)
-        operator_frame = ctk.CTkFrame(self.calculator_tab)
-        operator_frame.pack(pady=5)
-        for op in ["+", "-", "×", "÷"]:
-            ctk.CTkRadioButton(operator_frame, text=op, variable=self.operator_var, value=op).pack(side="left", padx=5)
+        self.btn_convert = ctk.CTkButton(top, text=T.BTN_CONVERT, command=self.on_convert, width=110)
+        self.btn_convert.grid(row=3, column=2, padx=(12, 6))
+        self.btn_swap = ctk.CTkButton(top, text=T.BTN_SWAP, command=self.on_swap, width=70)
+        self.btn_swap.grid(row=3, column=3, padx=6)
+        self.btn_clear = ctk.CTkButton(top, text=T.BTN_CLEAR, command=self.on_clear, width=80)
+        self.btn_clear.grid(row=3, column=4, padx=6)
 
-        ctk.CTkLabel(self.calculator_tab, text="진법 선택").pack(pady=2)
-        self.base2_menu = ctk.CTkOptionMenu(self.calculator_tab, values=Base_options, variable=self.base2_var)
-        self.base2_menu.pack()
+        top.grid_columnconfigure(7, weight=1)
 
-        self.input2 = ctk.CTkEntry(self.calculator_tab, placeholder_text="값 입력")
-        self.input2.pack(pady=5)
+    # ---------------- CENTER: 3분할 가변 패널 ----------------
+    def _build_resizable_panes(self):
+        pw = tk.PanedWindow(self, orient="horizontal", sashrelief="flat", sashwidth=8,
+                            bg=self.cget("bg"), bd=0, opaqueresize=True)
+        pw.pack(side="top", fill="both", expand=True, padx=12, pady=(0, 12))
 
-        ctk.CTkButton(self.calculator_tab, text="계산하기", command=self.calculate_and_display).pack(pady=10)
+        left = ctk.CTkFrame(pw)
+        mid = ctk.CTkFrame(pw)
+        right = ctk.CTkFrame(pw)
 
-        self.result_fields = {}
-        for label in Base_options:
-            row = ctk.CTkFrame(self.calculator_tab)
-            row.pack(pady=2, fill="x", padx=20)
-            ctk.CTkLabel(row, text=label, width=60).pack(side="left")
+        pw.add(left,  minsize=260)
+        pw.add(mid,   minsize=280)
+        pw.add(right, minsize=240)
 
-            entry = ctk.CTkEntry(row)
-            entry.configure(state="readonly")
-            entry.pack(side="left", fill="x", expand=True)
-            self.result_fields[label] = entry
+        # LEFT: 결과 + 요약
+        left.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(left, text=T.LBL_RESULT).grid(row=0, column=0, sticky="w")
+        self.var_result = ctk.StringVar(value="")
+        res_row = ctk.CTkFrame(left)
+        res_row.grid(row=1, column=0, sticky="ew", pady=(0, 6))
+        res_row.grid_columnconfigure(0, weight=1)
+        self.ent_result = ctk.CTkEntry(res_row, textvariable=self.var_result)
+        self.ent_result.grid(row=0, column=0, sticky="ew")
+        self.ent_result.configure(state="readonly")
+        ctk.CTkButton(res_row, text="복사", width=60,
+                      command=lambda: self._copy_to_clip(self.ent_result.get())
+                      ).grid(row=0, column=1, padx=(6, 0))
 
-    def build_converter_tab(self):
-        self.input_base_var = ctk.StringVar(value=Base_options[2])
-        ctk.CTkLabel(self.converter_tab, text="진법 선택").pack(pady=2)
-        self.input_base_menu = ctk.CTkOptionMenu(self.converter_tab, values=Base_options, variable=self.input_base_var)
-        self.input_base_menu.pack()
+        ctk.CTkLabel(left, text=T.LBL_SUMMARY).grid(row=2, column=0, sticky="w", pady=(6, 2))
+        self.sum2 = ctk.CTkEntry(left);  self._mk_ro(self.sum2)
+        self.sum8 = ctk.CTkEntry(left);  self._mk_ro(self.sum8)
+        self.sum10 = ctk.CTkEntry(left); self._mk_ro(self.sum10)
+        self.sum16 = ctk.CTkEntry(left); self._mk_ro(self.sum16)
+        self._row(left, 3, "2진", self.sum2)
+        self._row(left, 4, "8진", self.sum8)
+        self._row(left, 5, "10진", self.sum10)
+        self._row(left, 6, "16진", self.sum16)
 
-        self.input_value = ctk.CTkEntry(self.converter_tab, placeholder_text="값 입력")
-        self.input_value.pack(pady=5)
+        # MIDDLE: 변환/계산 과정
+        mid.grid_columnconfigure(0, weight=1)
+        mid.grid_rowconfigure(1, weight=1)
+        self.lbl_steps = ctk.CTkLabel(mid, text=T.LBL_STEPS)
+        self.lbl_steps.grid(row=0, column=0, sticky="w")
+        self.txt_steps = ctk.CTkTextbox(mid, wrap="word")
+        self.txt_steps.grid(row=1, column=0, sticky="nsew")
 
-        ctk.CTkButton(self.converter_tab, text="변환하기", command=self.convert_and_display).pack(pady=10)
+        # RIGHT: 히스토리
+        right.grid_columnconfigure(0, weight=1)
+        right.grid_rowconfigure(1, weight=1)
+        head = ctk.CTkFrame(right, fg_color="transparent")
+        head.grid(row=0, column=0, sticky="ew")
+        ctk.CTkLabel(head, text=T.LBL_HISTORY).pack(side="left")
+        ctk.CTkLabel(head, text="더블클릭/Enter로 불러오기", text_color=("gray70", "gray60")).pack(side="right")
 
-        self.convert_result_fields = {}
-        for label in Base_options:
-            row = ctk.CTkFrame(self.converter_tab)
-            row.pack(pady=2, fill="x", padx=20)
-            ctk.CTkLabel(row, text=label, width=60).pack(side="left")
+        hist_wrap = ctk.CTkFrame(right)
+        hist_wrap.grid(row=1, column=0, sticky="nsew", pady=(2, 0))
+        hist_wrap.grid_columnconfigure(0, weight=1)
+        hist_wrap.grid_rowconfigure(0, weight=1)
 
-            entry = ctk.CTkEntry(row)
-            entry.configure(state="readonly")
-            entry.pack(side="left", fill="x", expand=True)
-            self.convert_result_fields[label] = entry
+        # ✅ 테마에 맞춘 Listbox
+        mode = ctk.get_appearance_mode()
+        if mode == "Dark":
+            lb_bg, lb_fg, lb_selbg, lb_selfg = "#1f1f1f", "#eaeaea", "#3a7ebf", "#ffffff"
+        else:
+            lb_bg, lb_fg, lb_selbg, lb_selfg = "#ffffff", "#222222", "#cde4ff", "#000000"
 
-    def set_entry_value(self, entry: ctk.CTkEntry, value: str):
-        entry.configure(state="normal")
-        entry.delete(0, "end")
-        entry.insert(0, value)
+        self.lst_hist = Listbox(
+            hist_wrap,
+            exportselection=False,
+            bg=lb_bg, fg=lb_fg,
+            selectbackground=lb_selbg, selectforeground=lb_selfg,
+            highlightthickness=0, borderwidth=0
+        )
+        self.lst_hist.grid(row=0, column=0, sticky="nsew")
+        sb = Scrollbar(hist_wrap, orient="vertical", command=self.lst_hist.yview)
+        sb.grid(row=0, column=1, sticky="ns")
+        self.lst_hist.configure(yscrollcommand=sb.set)
+        self.lst_hist.bind("<Double-Button-1>", self.on_hist_load)
+        self.lst_hist.bind("<Return>", self.on_hist_load)
+
+        self.after(50, lambda: self._init_sash_positions(pw))
+
+        self.status = ctk.CTkLabel(self, text="")
+        self.status.pack(side="bottom", fill="x", padx=12, pady=(0, 6))
+
+    def _init_sash_positions(self, pw: tk.PanedWindow):
+        total = pw.winfo_width()
+        if total > 1:
+            x1, x2 = int(total * 0.33), int(total * 0.67)
+            pw.sash_place(0, x1, 1)
+            pw.sash_place(1, x2, 1)
+
+    def _init_hint(self):
+        self.txt_steps.configure(state="normal")
+        self.txt_steps.delete("1.0", "end")
+        self.txt_steps.insert("end", T.HINT)
+        self.txt_steps.configure(state="disabled")
+
+    # ---------------- Utilities ----------------
+    def _mk_ro(self, entry: ctk.CTkEntry):
         entry.configure(state="readonly")
-    def calculate_and_display(self):
-        val1 = self.input1.get()
-        val2 = self.input2.get()
-        base1 = self.base1_var.get()
-        base2 = self.base2_var.get()
-        operator = self.operator_var.get()
+
+    def _row(self, parent, r, label, entry):
+        fr = ctk.CTkFrame(parent)
+        fr.grid(row=r, column=0, sticky="ew", pady=2)
+        fr.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(fr, text=label, width=40).grid(row=0, column=0, sticky="w")
+        entry.grid(row=0, column=1, sticky="ew")
+        ctk.CTkButton(fr, text="복사", width=60,
+                      command=lambda e=entry: self._copy_to_clip(e.get())
+                      ).grid(row=0, column=2, padx=(6, 0))
+
+    def _copy_to_clip(self, text: str):
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(text)
+        except Exception:
+            pass
+
+    def _hist_refresh(self):
+        self.lst_hist.delete(0, END)
+        for line in self.hist.list_texts():
+            self.lst_hist.insert(END, line)
+
+    # ---------------- Events ----------------
+    def on_swap(self):
+        f, t = self.var_from.get(), self.var_to.get()
+        self.var_from.set(t)
+        self.var_to.set(f)
+
+    def on_clear(self):
+        self.var_input.set("")
+        self.var_result.set("")
+        for e in (self.sum2, self.sum8, self.sum10, self.sum16):
+            e.configure(state="normal"); e.delete(0, END); e.configure(state="readonly")
+        self._init_hint()
+        self.status.configure(text="")
+
+    def on_hist_load(self, event=None):
+        idxs = self.lst_hist.curselection()
+        if not idxs:
+            return
+        item = self.hist.get(idxs[0])
+        if not item:
+            return
+        self.var_input.set(item.expr)
+        self.var_from.set(str(item.base_from))
+        self.var_to.set(str(item.base_to))
+        self.var_result.set(item.result)
+        self.status.configure(text="히스토리에서 불러옴")
+
+    def on_convert(self):
+        expr = self.var_input.get().strip()
+        try:
+            base_from = int(self.var_from.get())
+            base_to = int(self.var_to.get())
+        except Exception:
+            messagebox.showerror("오류", "진법 선택이 잘못되었습니다.")
+            return
+
+        if not expr:
+            messagebox.showerror("오류", "입력 값이 비어 있습니다.")
+            return
+
+        is_expr = bool(re.search(r"[+\-*/()]", expr))
+        self.lbl_steps.configure(text=("계산 과정" if is_expr else "변환 과정"))
 
         try:
-            result = calculate(val1, val2, base1, base2, operator)
-            converted = convert_result_to_bases(result)
-            for base in Base_options:
-                self.set_entry_value(self.result_fields[base], converted[base])
+            out, steps = convert(expr, base_from, base_to)
         except Exception as e:
-            for field in self.result_fields.values():
-                self.set_entry_value(field, f"오류: {str(e)}")
+            messagebox.showerror("변환 실패", f"{T.ERR_INVALID}\n\n{e}")
+            return
 
-    def convert_and_display(self):
-        val = self.input_value.get()
-        base = self.input_base_var.get()
+        self.var_result.set(out)
+        self.txt_steps.configure(state="normal")
+        self.txt_steps.delete("1.0", "end")
+        for s in steps:
+            self.txt_steps.insert("end", s + "\n")
+        self.txt_steps.configure(state="disabled")
 
         try:
-            num = to_int(val, base)
-            converted = convert_result_to_bases(num)
-            for b in Base_options:
-                self.set_entry_value(self.convert_result_fields[b], converted[b])
-        except Exception as e:
-            for field in self.convert_result_fields.values():
-                self.set_entry_value(field, f"오류: {str(e)}")
+            if is_expr:
+                dec, _ = evaluate_expression(expr, base_from)
+            else:
+                dec, _ = to_decimal(expr, base_from)
+            b2, _ = from_decimal(dec, 2)
+            b8, _ = from_decimal(dec, 8)
+            b10 = f"{dec}"
+            b16, _ = from_decimal(dec, 16)
+            for entry, val in ((self.sum2, b2), (self.sum8, b8), (self.sum10, b10), (self.sum16, b16)):
+                entry.configure(state="normal"); entry.delete(0, END); entry.insert(0, val); entry.configure(state="readonly")
+        except Exception:
+            pass
 
-
-def start_ui():
-    app = BaseConverterApp()
-    app.mainloop()
+        self.hist.add(expr, base_from, base_to, out)
+        self._hist_refresh()
+        self.status.configure(text="완료")
