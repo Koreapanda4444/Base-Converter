@@ -20,7 +20,7 @@ class App(ctk.CTk):
 
         self.title(T.APP_TITLE)
         self._init_window_size()
-        self.hist = HistoryStore()   # ✅ JSON 자동 저장/불러오기 지원
+        self.hist = HistoryStore()   # JSON 자동 저장/불러오기 지원
 
         # 3분할 레이아웃
         self._build_resizable_panes()
@@ -30,8 +30,26 @@ class App(ctk.CTk):
         # 히스토리 초기 렌더링
         self.after(100, self._hist_refresh)
 
-        # 키보드 단축키: Delete로 선택 항목 삭제
+        # ---- 단축키 바인딩 ----
+        # Enter: 입력창에서 변환 실행
+        self.ent_input.bind("<Return>", lambda e: self.on_convert())
+        # Delete: 히스토리 선택 삭제
         self.bind("<Delete>", lambda e: self.del_selected())
+        # Ctrl+C: 결과 복사
+        self.bind("<Control-c>", lambda e: self._copy_and_flash(self.var_result.get()))
+        self.bind("<Control-C>", lambda e: self._copy_and_flash(self.var_result.get()))
+        # Ctrl+L: 입력 초기화
+        self.bind("<Control-l>", lambda e: self._shortcut_clear())
+        self.bind("<Control-L>", lambda e: self._shortcut_clear())
+        # Ctrl+Up/Down: 출력 진법(To) 증감
+        self.bind("<Control-Up>",   lambda e: self._step_base(self.var_to, +1))
+        self.bind("<Control-Down>", lambda e: self._step_base(self.var_to, -1))
+        # Ctrl+Shift+Up/Down: 입력 진법(From) 증감
+        self.bind("<Control-Shift-Up>",   lambda e: self._step_base(self.var_from, +1))
+        self.bind("<Control-Shift-Down>", lambda e: self._step_base(self.var_from, -1))
+        # Ctrl+H: 히스토리 포커스
+        self.bind("<Control-h>", lambda e: self._focus_history())
+        self.bind("<Control-H>", lambda e: self._focus_history())
 
     # ---------------- Window sizing ----------------
     def _init_window_size(self):
@@ -208,6 +226,41 @@ class App(ctk.CTk):
             self.tree.insert("", "end", iid=str(idx),
                              values=(item.expr, bases, item.result))
 
+    # ---- 단축키 헬퍼 ----
+    def _focus_history(self):
+        try:
+            self.tree.focus_set()
+            # 선택 항목 없으면 첫 줄 선택
+            cur = self.tree.selection()
+            if not cur:
+                first = self.tree.get_children()
+                if first:
+                    self.tree.selection_set(first[0])
+            self.status.configure(text="히스토리로 이동")
+        except Exception:
+            pass
+
+    def _step_base(self, var: ctk.StringVar, delta: int):
+        """진법 콤보값을 T.BASES 내에서 순환 증가/감소"""
+        try:
+            bases = [str(b) for b in T.BASES]
+            cur = str(var.get())
+            if cur not in bases:
+                cur = bases[0]
+            i = bases.index(cur)
+            i = (i + delta) % len(bases)
+            var.set(bases[i])
+            # 시각 피드백
+            tgt = "출력 진법" if var is self.var_to else "입력 진법"
+            self.status.configure(text=f"{tgt} → {bases[i]}")
+        except Exception:
+            pass
+
+    def _shortcut_clear(self):
+        self.on_clear()
+        self.ent_input.focus_set()
+        self.status.configure(text="입력 초기화")
+
     # ---------------- Events ----------------
     def on_swap(self):
         f, t = self.var_from.get(), self.var_to.get()
@@ -277,7 +330,8 @@ class App(ctk.CTk):
             b10 = f"{dec}"; b16, _ = from_decimal(dec, 16)
             for entry, val in ((self.sum2, b2), (self.sum8, b8), (self.sum10, b10), (self.sum16, b16)):
                 entry.configure(state="normal"); entry.delete(0, END); entry.insert(0, val); entry.configure(state="readonly")
-        except Exception: pass
+        except Exception:
+            pass
 
         self.hist.add(expr, base_from, base_to, out)
         self._hist_refresh()
