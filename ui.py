@@ -71,7 +71,7 @@ class App(ctk.CTk):
         self.mid = ctk.CTkFrame(pw)
         self.right = ctk.CTkFrame(pw)
 
-        pw.add(self.left,  minsize=340)
+        pw.add(self.left,  minsize=360)
         pw.add(self.mid,   minsize=320)
         pw.add(self.right, minsize=300)
 
@@ -100,13 +100,13 @@ class App(ctk.CTk):
         # --- 입력 블록 ---
         inp = ctk.CTkFrame(parent)
         inp.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        inp.grid_columnconfigure(7, weight=1)
+        inp.grid_columnconfigure(9, weight=1)
 
         ctk.CTkLabel(inp, text=T.LBL_INPUT).grid(row=0, column=0, sticky="w")
         self.var_input = ctk.StringVar(value="")
         self.ent_input = ctk.CTkEntry(inp, textvariable=self.var_input,
                                       placeholder_text="예: 1011.01  또는  A.F + 10")
-        self.ent_input.grid(row=1, column=0, columnspan=8, sticky="ew", pady=(2, 8))
+        self.ent_input.grid(row=1, column=0, columnspan=10, sticky="ew", pady=(2, 8))
 
         ctk.CTkLabel(inp, text=T.LBL_FROM).grid(row=2, column=0, sticky="w")
         self.var_from = ctk.StringVar(value="10")
@@ -118,12 +118,26 @@ class App(ctk.CTk):
         self.cmb_to = ctk.CTkComboBox(inp, values=T.BASES, variable=self.var_to, width=100)
         self.cmb_to.grid(row=3, column=1, sticky="w", padx=(6, 0))
 
+        # --- 정밀도/반올림 옵션 추가 ---
+        ctk.CTkLabel(inp, text="소수 자릿수").grid(row=2, column=2, sticky="w", padx=(16, 0))
+        self.var_prec = ctk.StringVar(value="8")
+        self.cmb_prec = ctk.CTkComboBox(inp, values=["0","2","4","8","12","16","24","32"],
+                                        variable=self.var_prec, width=70)
+        self.cmb_prec.grid(row=3, column=2, sticky="w")
+
+        ctk.CTkLabel(inp, text="반올림 모드").grid(row=2, column=3, sticky="w", padx=(16, 0))
+        # rmode: round(반올림) / floor(버림) / ceil(올림)
+        self.var_rmode = ctk.StringVar(value="round")
+        self.cmb_rmode = ctk.CTkComboBox(inp, values=["round","floor","ceil"],
+                                         variable=self.var_rmode, width=90)
+        self.cmb_rmode.grid(row=3, column=3, sticky="w")
+
         self.btn_convert = ctk.CTkButton(inp, text=T.BTN_CONVERT, command=self.on_convert, width=110)
-        self.btn_convert.grid(row=3, column=2, padx=(12, 6))
+        self.btn_convert.grid(row=3, column=5, padx=(16, 6))
         self.btn_swap = ctk.CTkButton(inp, text=T.BTN_SWAP, command=self.on_swap, width=70)
-        self.btn_swap.grid(row=3, column=3, padx=6)
+        self.btn_swap.grid(row=3, column=6, padx=6)
         self.btn_clear = ctk.CTkButton(inp, text=T.BTN_CLEAR, command=self.on_clear, width=80)
-        self.btn_clear.grid(row=3, column=4, padx=6)
+        self.btn_clear.grid(row=3, column=7, padx=6)
 
         # --- 결과 블록 ---
         ctk.CTkLabel(parent, text=T.LBL_RESULT).grid(row=1, column=0, sticky="w")
@@ -224,13 +238,12 @@ class App(ctk.CTk):
         for idx, item in enumerate(self.hist.items):
             bases = f"{item.base_from}→{item.base_to}"
             self.tree.insert("", "end", iid=str(idx),
-                             values=(item.expr, bases, item.result))
+                            values=(item.expr, bases, item.result))
 
     # ---- 단축키 헬퍼 ----
     def _focus_history(self):
         try:
             self.tree.focus_set()
-            # 선택 항목 없으면 첫 줄 선택
             cur = self.tree.selection()
             if not cur:
                 first = self.tree.get_children()
@@ -245,12 +258,9 @@ class App(ctk.CTk):
         try:
             bases = [str(b) for b in T.BASES]
             cur = str(var.get())
-            if cur not in bases:
-                cur = bases[0]
-            i = bases.index(cur)
-            i = (i + delta) % len(bases)
+            if cur not in bases: cur = bases[0]
+            i = (bases.index(cur) + delta) % len(bases)
             var.set(bases[i])
-            # 시각 피드백
             tgt = "출력 진법" if var is self.var_to else "입력 진법"
             self.status.configure(text=f"{tgt} → {bases[i]}")
         except Exception:
@@ -316,27 +326,163 @@ class App(ctk.CTk):
         except Exception as e:
             messagebox.showerror("변환 실패", f"{T.ERR_INVALID}\n\n{e}"); return
 
-        self.var_result.set(out)
-        self._copy_and_flash(out)
+        # ---- 정밀도/반올림 옵션 적용 ----
+        prec = self._get_precision()
+        rmode = self.var_rmode.get()
+        out_rounded = self._apply_rounding(out, base_to, prec, rmode)
+        self.var_result.set(out_rounded)
+        self._copy_and_flash(out_rounded)
+
+        # 과정 출력
         self.txt_steps.configure(state="normal")
         self.txt_steps.delete("1.0", "end")
         for s in steps: self.txt_steps.insert("end", s + "\n")
+        self.txt_steps.insert("end", f"\n[정밀도: {prec}, 모드: {rmode}]")
         self.txt_steps.configure(state="disabled")
 
+        # 요약(2/8/10/16) - 동일 옵션으로 반영
         try:
             if is_expr: dec, _ = evaluate_expression(expr, base_from)
             else: dec, _ = to_decimal(expr, base_from)
-            b2, _ = from_decimal(dec, 2); b8, _ = from_decimal(dec, 8)
-            b10 = f"{dec}"; b16, _ = from_decimal(dec, 16)
+            b2, _ = from_decimal(dec, 2);   b2 = self._apply_rounding(b2, 2, prec, rmode)
+            b8, _ = from_decimal(dec, 8);   b8 = self._apply_rounding(b8, 8, prec, rmode)
+            b10 = f"{dec}"
+            # 10진은 문자열이 정수일 수도 있으니 동일 처리
+            b10 = self._apply_rounding(b10 if "." in b10 else b10 + ".0", 10, prec, rmode).rstrip(".0")
+            b16, _ = from_decimal(dec, 16); b16 = self._apply_rounding(b16, 16, prec, rmode)
             for entry, val in ((self.sum2, b2), (self.sum8, b8), (self.sum10, b10), (self.sum16, b16)):
                 entry.configure(state="normal"); entry.delete(0, END); entry.insert(0, val); entry.configure(state="readonly")
         except Exception:
             pass
 
-        self.hist.add(expr, base_from, base_to, out)
+        # 히스토리 반영 (저장값은 반올림 적용된 결과 그대로 저장)
+        self.hist.add(expr, base_from, base_to, out_rounded)
         self._hist_refresh()
         self.status.configure(text="완료")
 
+    # ---------------- Rounding helpers ----------------
+    def _get_precision(self) -> int:
+        try:
+            p = int(self.var_prec.get())
+            return max(0, min(64, p))  # 과도한 값 방지
+        except Exception:
+            return 8
+
+    def _apply_rounding(self, s: str, base: int, prec: int, mode: str) -> str:
+        """임의 진법 문자열 s에 대해 소수부 자릿수를 prec으로, mode(round/floor/ceil)로 반영"""
+        # 빠른 경로: prec==0 이면 정수 반올림
+        sign = ""
+        if s.startswith("-"):
+            sign, s = "-", s[1:]
+        if "." not in s:
+            # 정수: 필요 시 .0 붙여 로직 통일
+            frac = ""
+            intp = s
+        else:
+            intp, frac = s.split(".", 1)
+
+        # 소수부 없거나 충분히 짧으면 처리 간단
+        if prec == 0:
+            # 정수 자리로 반올림
+            needs_inc = False
+            if mode == "round":
+                needs_inc = self._should_round_up(frac[:1], frac[1:], base, positive=(sign==""))
+            elif mode == "ceil":
+                needs_inc = (frac != "" and sign == "")  # 양수는 올림, 음수는 그대로
+            elif mode == "floor":
+                needs_inc = (frac != "" and sign == "-") # 음수는 내림(더 작게 = 절댓값 커짐)
+            if needs_inc:
+                intp = self._inc_base_str(intp, base)
+            return (sign + intp)
+
+        # prec > 0
+        if len(frac) <= prec:
+            # 패딩은 하지 않고 그대로 반환
+            return (sign + intp + ("." + frac if frac else ""))
+
+        keep = frac[:prec]
+        drop_head = frac[prec:prec+1]  # 첫 드랍 자리
+        drop_tail = frac[prec+1:]      # 그 뒤
+
+        if mode == "round":
+            up = self._should_round_up(drop_head, drop_tail, base, positive=(sign==""))
+        elif mode == "ceil":
+            # 양수면 올림(드랍에 0 아닌게 있으면)
+            up = (sign == "" and (drop_head and drop_head != "0" or any(c != "0" for c in drop_tail)))
+        elif mode == "floor":
+            # 음수면 올림의 반대(내림=더 작게) → 자리 올림 필요
+            up = (sign == "-" and (drop_head and drop_head != "0" or any(c != "0" for c in drop_tail)))
+        else:
+            up = False  # safety
+
+        if up:
+            keep, carry = self._inc_frac(keep, base)
+            if carry:
+                intp = self._inc_base_str(intp, base)
+        # 반올림/버림/올림 후, 드랍된 부분 제거
+        keep = keep.rstrip()  # 의미 없음이지만 안전
+        if prec == 0:
+            return (sign + intp)
+        return (sign + intp + "." + keep)
+
+    def _should_round_up(self, first_drop: str, rest: str, base: int, positive: bool=True) -> bool:
+        """반올림(half-up) 기준: first_drop >= base/2 이면 올림 (양/음 부호 무관: 일반 half-up)"""
+        if not first_drop:
+            return False
+        th = (base + 1) // 2  # base/2 이상이면 올림 (예: base=2 -> th=1)
+        d = self._digval(first_drop)
+        if d > th: return True
+        if d < th: return False
+        # 정확히 절반일 때: half-up → 올림
+        return True
+
+    def _inc_frac(self, frac_keep: str, base: int):
+        """소수부(보존 부분) 1 단위 증가. 반환: (증가된문자열, carry_bool)"""
+        if not frac_keep:
+            return "", True  # 소수부가 없고 올림이면 정수로 캐리
+        arr = list(frac_keep)
+        i = len(arr) - 1
+        carry = True
+        while i >= 0 and carry:
+            v = self._digval(arr[i]) + 1
+            if v >= base:
+                arr[i] = self._digchr(0)
+                carry = True
+                i -= 1
+            else:
+                arr[i] = self._digchr(v)
+                carry = False
+        return "".join(arr), carry
+
+    def _inc_base_str(self, intp: str, base: int) -> str:
+        """정수부 1 증가 (임의 진법)"""
+        if intp == "": intp = "0"
+        arr = list(intp)
+        i = len(arr) - 1
+        carry = True
+        while i >= 0 and carry:
+            v = self._digval(arr[i]) + 1
+            if v >= base:
+                arr[i] = self._digchr(0)
+                carry = True
+                i -= 1
+            else:
+                arr[i] = self._digchr(v)
+                carry = False
+        if carry:
+            arr.insert(0, self._digchr(1))
+        return "".join(arr)
+
+    def _digval(self, ch: str) -> int:
+        ch = ch.upper()
+        if "0" <= ch <= "9":
+            return ord(ch) - ord("0")
+        return 10 + ord(ch) - ord("A")
+
+    def _digchr(self, v: int) -> str:
+        return "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"[v]
+
+    # ---------------- Style & misc ----------------
     def _style_treeview(self):
         style = ttk.Style()
         mode = ctk.get_appearance_mode()
