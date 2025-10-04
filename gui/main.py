@@ -1,4 +1,4 @@
-from gui.ui import run
+from gui.ui import App
 
 if __name__ == "__main__":
-    run()
+    App().mainloop()

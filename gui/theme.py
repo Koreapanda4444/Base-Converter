@@ -1,7 +1,6 @@
-import customtkinter as ctk
-def apply_theme():
-    try:
-        ctk.set_appearance_mode("system")
-        ctk.set_default_color_theme("blue")
-    except Exception:
-        pass
+from gui.theme_manager import ThemeConfig, load_theme, save_theme, apply_theme, make_font
+
+def init_theme():
+    cfg = load_theme()
+    apply_theme(cfg)
+    return cfg

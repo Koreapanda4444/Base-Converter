@@ -1,3 +1,4 @@
+# gui/ui.py
 import re
 import tkinter as tk
 import customtkinter as ctk
@@ -37,7 +38,7 @@ class App(ctk.CTk):
         self._hist_view = []  # 현재 화면에 표시 중인 히스토리(검색/정렬 반영본)
 
         self._build_panes()
-        self._style_treeview()
+        self._style_treeview()  # ← Treeview(히스토리 표) 색상 다크/라이트 맞춤 적용
         self._init_hint()
 
         self.after(100, self._hist_refresh)
@@ -200,9 +201,48 @@ class App(ctk.CTk):
         return entry
 
     def _style_treeview(self):
+        # 라이트/다크 모드에 맞춰 ttk.Treeview 색상 커스터마이즈
+        # (히스토리 표가 흰색으로 떠보이는 문제 해결)
         style = ttk.Style()
-        style.theme_use("default")
-        style.configure("Treeview", rowheight=24)
+        try:
+            style.theme_use("default")
+        except Exception:
+            pass
+
+        mode = ctk.get_appearance_mode()  # "Light" | "Dark"
+        dark = (mode.lower() == "dark")
+
+        bg = "#1E1E1E" if dark else "#F2F2F2"       # 표 본문 배경
+        fg = "#FFFFFF" if dark else "#000000"       # 표 본문 글자
+        sel_bg = "#2D6CDF" if dark else "#CDE1FF"   # 선택 배경
+        sel_fg = "#FFFFFF" if dark else "#000000"   # 선택 글자
+        head_bg = "#2A2A2A" if dark else "#E6E6E6"  # 헤더 배경
+        head_fg = "#FFFFFF" if dark else "#000000"  # 헤더 글자
+        border = "#333333" if dark else "#C0C0C0"
+
+        style.configure(
+            "Treeview",
+            background=bg,
+            fieldbackground=bg,
+            foreground=fg,
+            rowheight=24,
+            bordercolor=border,
+            borderwidth=0
+        )
+        style.map(
+            "Treeview",
+            background=[("selected", sel_bg)],
+            foreground=[("selected", sel_fg)]
+        )
+        style.configure(
+            "Treeview.Heading",
+            background=head_bg,
+            foreground=head_fg,
+            relief="flat"
+        )
+        style.map("Treeview.Heading",
+                  background=[("active", head_bg)],
+                  foreground=[("active", head_fg)])
 
     def _init_hint(self):
         self.txt_steps.configure(state="normal")
