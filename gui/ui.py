@@ -10,6 +10,8 @@ from converter.logic import convert, to_decimal, from_decimal, evaluate_expressi
 MIN_W, MIN_H = 900, 560
 MAX_W, MAX_H = 1600, 1000
 
+ROUND_CHOICES = ["HALF_UP", "HALF_DOWN", "HALF_EVEN", "CEILING", "FLOOR"]
+
 
 class App(ctk.CTk):
     def __init__(self):
@@ -59,13 +61,13 @@ class App(ctk.CTk):
 
         inp = ctk.CTkFrame(self.left)
         inp.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        inp.grid_columnconfigure(9, weight=1)
+        inp.grid_columnconfigure(10, weight=1)
 
         # 입력 박스
         ctk.CTkLabel(inp, text=T.LBL_INPUT).grid(row=0, column=0, sticky="w")
         self.var_input = tk.StringVar(value="")
         self.ent_input = ctk.CTkEntry(inp, textvariable=self.var_input, placeholder_text="예: 1011.01 또는 (A.F + 10)")
-        self.ent_input.grid(row=1, column=0, columnspan=10, sticky="ew", pady=(2, 8))
+        self.ent_input.grid(row=1, column=0, columnspan=11, sticky="ew", pady=(2, 8))
 
         # 진법 선택
         ctk.CTkLabel(inp, text=T.LBL_FROM).grid(row=2, column=0, sticky="w")
@@ -78,19 +80,25 @@ class App(ctk.CTk):
         self.cmb_to = ctk.CTkComboBox(inp, values=T.BASES, variable=self.var_to, width=90)
         self.cmb_to.grid(row=3, column=1, sticky="w", padx=(6, 0))
 
-        # 정밀도 옵션 추가
+        # 정밀도 옵션
         ctk.CTkLabel(inp, text="정밀도").grid(row=2, column=2, sticky="w")
         self.var_prec = tk.IntVar(value=12)
         self.ent_prec = ctk.CTkEntry(inp, textvariable=self.var_prec, width=60)
         self.ent_prec.grid(row=3, column=2, sticky="w", padx=(2, 8))
 
+        # 반올림 모드 드롭다운
+        ctk.CTkLabel(inp, text="반올림").grid(row=2, column=3, sticky="w")
+        self.var_round = tk.StringVar(value="HALF_UP")
+        self.cmb_round = ctk.CTkComboBox(inp, values=ROUND_CHOICES, variable=self.var_round, width=120)
+        self.cmb_round.grid(row=3, column=3, sticky="w", padx=(2, 8))
+
         # 버튼들
         self.btn_convert = ctk.CTkButton(inp, text=T.BTN_CONVERT, command=self.on_convert, width=110)
-        self.btn_convert.grid(row=3, column=3, padx=(12, 6))
+        self.btn_convert.grid(row=3, column=4, padx=(12, 6))
         self.btn_swap = ctk.CTkButton(inp, text=T.BTN_SWAP, command=self.on_swap, width=70)
-        self.btn_swap.grid(row=3, column=4, padx=6)
+        self.btn_swap.grid(row=3, column=5, padx=6)
         self.btn_clear = ctk.CTkButton(inp, text=T.BTN_CLEAR, command=self.on_clear, width=80)
-        self.btn_clear.grid(row=3, column=5, padx=6)
+        self.btn_clear.grid(row=3, column=6, padx=6)
 
         # 결과 영역
         ctk.CTkLabel(self.left, text=T.LBL_RESULT).grid(row=4, column=0, sticky="w")
@@ -100,7 +108,8 @@ class App(ctk.CTk):
         self.var_result = tk.StringVar(value="")
         self.ent_result = ctk.CTkEntry(res_row, textvariable=self.var_result, state="readonly")
         self.ent_result.grid(row=0, column=0, sticky="ew")
-        ctk.CTkButton(res_row, text=T.BTN_COPY, width=60, command=lambda: self._copy_to_clip(self.ent_result.get())).grid(row=0, column=1, padx=(6, 0))
+        ctk.CTkButton(res_row, text=T.BTN_COPY, width=60,
+                      command=lambda: self._copy_to_clip(self.ent_result.get())).grid(row=0, column=1, padx=(6, 0))
 
         # 요약 영역 (2,8,10,16진)
         ctk.CTkLabel(self.left, text=T.LBL_SUMMARY).grid(row=6, column=0, sticky="w", pady=(6, 2))
@@ -157,7 +166,8 @@ class App(ctk.CTk):
         ctk.CTkLabel(fr, text=label, width=40).grid(row=0, column=0, sticky="w")
         entry = ctk.CTkEntry(fr, state="readonly")
         entry.grid(row=0, column=1, sticky="ew")
-        ctk.CTkButton(fr, text=T.BTN_COPY, width=60, command=lambda e=entry: self._copy_to_clip(e.get())).grid(row=0, column=2, padx=(6, 0))
+        ctk.CTkButton(fr, text=T.BTN_COPY, width=60,
+                      command=lambda e=entry: self._copy_to_clip(e.get())).grid(row=0, column=2, padx=(6, 0))
         return entry
 
     def _style_treeview(self):
@@ -235,12 +245,13 @@ class App(ctk.CTk):
             base_from = int(self.var_from.get())
             base_to = int(self.var_to.get())
             precision = int(self.var_prec.get())
+            round_mode = self.var_round.get().strip() or "HALF_UP"
         except Exception:
-            messagebox.showerror("오류", "진법 또는 정밀도 설정이 잘못되었습니다.")
+            messagebox.showerror("오류", "진법 또는 정밀도/반올림 설정이 잘못되었습니다.")
             return
 
         try:
-            out, steps = convert(expr, base_from, base_to, precision=precision)
+            out, steps = convert(expr, base_from, base_to, precision=precision, round_mode_str=round_mode)
         except Exception as e:
             messagebox.showerror("변환 실패", f"{T.ERR_INVALID}\n\n{e}")
             return
@@ -256,7 +267,7 @@ class App(ctk.CTk):
         # 요약 (2/8/10/16)
         try:
             if any(c in expr for c in "+-*/()"):
-                dec, _ = evaluate_expression(expr, base_from, precision=precision)
+                dec, _ = evaluate_expression(expr, base_from, precision=precision, round_mode=round_mode)
             else:
                 dec, _ = to_decimal(expr, base_from)
             b2, _ = from_decimal(dec, 2, precision)
