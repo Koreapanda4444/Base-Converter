@@ -1,28 +1,31 @@
 import re
-from decimal import Decimal, getcontext
+from decimal import Decimal, getcontext, ROUND_HALF_UP, ROUND_HALF_DOWN, ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_EVEN
 from .utils import DIGITS, digval, split_tokens, is_operator
 
 # =========================================================
-# ⚙️ 전역 정밀도 설정 (기본 32, CLI/GUI에서 변경 가능)
+# ⚙️ 전역 설정
 # =========================================================
 DEFAULT_PRECISION = 32
+DEFAULT_ROUND_MODE = ROUND_HALF_UP  # 기본 반올림 방식
+ROUND_MODES = {
+    "HALF_UP": ROUND_HALF_UP,
+    "HALF_DOWN": ROUND_HALF_DOWN,
+    "HALF_EVEN": ROUND_HALF_EVEN,
+    "CEILING": ROUND_CEILING,
+    "FLOOR": ROUND_FLOOR,
+}
+
 getcontext().prec = DEFAULT_PRECISION
+getcontext().rounding = DEFAULT_ROUND_MODE
 
 
 # =========================================================
-# 🔧 입력 자동 보정 (공백, 소문자, 불필요한 문자 제거)
+# 🔧 입력 보정
 # =========================================================
 def normalize_input(value: str, base: int) -> str:
-    """
-    입력 문자열을 정리 및 진법 범위 내 문자만 남김.
-    - 공백, 밑줄, 쉼표 제거
-    - 소문자 → 대문자
-    - 진법 범위 초과 문자 제거
-    """
     if not value:
         return ""
     value = value.strip().replace(" ", "").replace("_", "").replace(",", "").upper()
-
     valid_chars = DIGITS[:base] + ".-+*/()"
     filtered = "".join(ch for ch in value if ch in valid_chars)
     if filtered != value:
@@ -34,10 +37,7 @@ def normalize_input(value: str, base: int) -> str:
 # 🧮 진법 → 10진 변환
 # =========================================================
 def to_decimal(s: str, base: int):
-    """문자열 s(부호/소수점 포함)를 10진 Decimal로 변환."""
     s = normalize_input(s, base)
-
-    # 음수 처리
     sign = 1
     if s.startswith('-'):
         sign = -1
@@ -48,16 +48,13 @@ def to_decimal(s: str, base: int):
         intp, frac = s, ""
 
     val = Decimal(0)
-    # 정수부 변환
     for ch in intp:
-        if ch == "": 
-            continue
+        if ch == "": continue
         v = digval(ch)
         if v >= base or v < 0:
             raise ValueError(f"'{ch}'는 {base}진수에서 사용할 수 없습니다.")
         val = val * base + v
 
-    # 소수부 변환
     power = Decimal(1)
     for ch in frac:
         v = digval(ch)
@@ -67,15 +64,13 @@ def to_decimal(s: str, base: int):
         val += Decimal(v) / power
 
     result = sign * val
-    steps = [f"[{base}→10] {s} -> {result}"]
-    return result, steps
+    return result, [f"[{base}→10] {s} -> {result}"]
 
 
 # =========================================================
 # 🔁 10진 → 목표 진법 변환
 # =========================================================
 def from_decimal(dec: Decimal, base: int, precision: int = DEFAULT_PRECISION):
-    """10진 Decimal을 목표 진법 문자열로. 소수부 precision 자리까지 표시."""
     if base < 2 or base > 36:
         raise ValueError("기수는 2~36 사이여야 합니다.")
 
@@ -85,7 +80,6 @@ def from_decimal(dec: Decimal, base: int, precision: int = DEFAULT_PRECISION):
     int_part = int(dec // 1)
     frac_part = dec - int_part
 
-    # 정수부
     if int_part == 0:
         int_str = '0'
     else:
@@ -96,7 +90,6 @@ def from_decimal(dec: Decimal, base: int, precision: int = DEFAULT_PRECISION):
             n //= base
         int_str = ''.join(reversed(digs))
 
-    # 소수부
     if frac_part == 0:
         frac_str = ''
     else:
@@ -115,11 +108,13 @@ def from_decimal(dec: Decimal, base: int, precision: int = DEFAULT_PRECISION):
 
 
 # =========================================================
-# 🧩 진법 수식 계산기 (eval 안전 제한)
+# 🧩 진법 수식 계산기
 # =========================================================
-def evaluate_expression(expr: str, base: int, precision: int = DEFAULT_PRECISION):
-    """진법 수식을 10진 Decimal로 계산."""
+def evaluate_expression(expr: str, base: int, precision: int = DEFAULT_PRECISION, round_mode=DEFAULT_ROUND_MODE):
     expr = normalize_input(expr, base)
+    getcontext().prec = precision
+    getcontext().rounding = round_mode
+
     tokens = split_tokens(expr)
     dec_tokens = []
     steps = []
@@ -135,33 +130,30 @@ def evaluate_expression(expr: str, base: int, precision: int = DEFAULT_PRECISION
     dec_expr = ''.join(dec_tokens)
     steps.append(f"[10진 수식] {dec_expr}")
 
-    # 안전한 eval 실행
     try:
         result = Decimal(str(eval(dec_expr, {"__builtins__": None}, {})))
     except Exception as e:
         raise ValueError(f"수식 계산 실패: {e}")
 
-    getcontext().prec = precision
+    result = result.quantize(Decimal("1." + "0" * precision), rounding=round_mode)
     steps.append(f"[10진 결과] {result}")
     return result, steps
 
 
 # =========================================================
-# 🔄 통합 변환 함수 (진법 ↔ 진법)
+# 🔄 통합 변환 함수
 # =========================================================
-def convert(expr: str, base_from: int, base_to: int, precision: int = DEFAULT_PRECISION):
-    """
-    expr: 변환할 표현식 (숫자 or 수식)
-    base_from: 입력 진법
-    base_to: 출력 진법
-    precision: 소수부 정밀도 (기본 32)
-    """
+def convert(expr: str, base_from: int, base_to: int, precision: int = DEFAULT_PRECISION, round_mode_str: str = "HALF_UP"):
     expr = normalize_input(expr, base_from)
+    round_mode = ROUND_MODES.get(round_mode_str.upper(), DEFAULT_ROUND_MODE)
+    getcontext().prec = precision
+    getcontext().rounding = round_mode
+
     is_expr = bool(re.search(r"[+\-*/()]", expr))
     all_steps = []
 
     if is_expr:
-        dec, steps = evaluate_expression(expr, base_from, precision)
+        dec, steps = evaluate_expression(expr, base_from, precision, round_mode)
         all_steps += steps
     else:
         dec, steps = to_decimal(expr, base_from)
