@@ -5,7 +5,7 @@ import customtkinter as ctk
 from tkinter import ttk, messagebox, END, Scrollbar
 
 from gui import ui_text as T
-from history.store import HistoryStore
+from history.store import HistoryStore, HistoryItem
 from converter.logic import convert, to_decimal, from_decimal, evaluate_expression
 
 MIN_W, MIN_H = 900, 560
@@ -38,7 +38,7 @@ class App(ctk.CTk):
         self._hist_view = []  # 현재 화면에 표시 중인 히스토리(검색/정렬 반영본)
 
         self._build_panes()
-        self._style_treeview()  # ← Treeview(히스토리 표) 색상 다크/라이트 맞춤 적용
+        self._style_treeview()  # Treeview 색상 통일
         self._init_hint()
 
         self.after(100, self._hist_refresh)
@@ -142,7 +142,7 @@ class App(ctk.CTk):
 
         # RIGHT (히스토리)
         self.right.grid_columnconfigure(0, weight=1)
-        self.right.grid_rowconfigure(1, weight=1)
+        self.right.grid_rowconfigure(2, weight=1)
 
         head = ctk.CTkFrame(self.right, fg_color="transparent")
         head.grid(row=0, column=0, sticky="ew", padx=(0, 0), pady=(0, 6))
@@ -163,8 +163,14 @@ class App(ctk.CTk):
         self.cmb_sort.pack(side="left")
         self.cmb_sort.bind("<<ComboboxSelected>>", lambda e: self._hist_refresh())
 
+        # 🔹 히스토리 제어 버튼 (선택삭제 / 전체삭제)
+        control_wrap = ctk.CTkFrame(self.right, fg_color="transparent")
+        control_wrap.grid(row=1, column=0, sticky="ew", padx=(0, 0), pady=(0, 4))
+        ctk.CTkButton(control_wrap, text="선택삭제", width=80, command=self.on_hist_delete).pack(side="left", padx=(0,6))
+        ctk.CTkButton(control_wrap, text="전체삭제", width=80, command=self.on_hist_clear).pack(side="left")
+
         wrap = ctk.CTkFrame(self.right)
-        wrap.grid(row=1, column=0, sticky="nsew")
+        wrap.grid(row=2, column=0, sticky="nsew")
         wrap.grid_columnconfigure(0, weight=1)
         wrap.grid_rowconfigure(0, weight=1)
 
@@ -201,23 +207,21 @@ class App(ctk.CTk):
         return entry
 
     def _style_treeview(self):
-        # 라이트/다크 모드에 맞춰 ttk.Treeview 색상 커스터마이즈
-        # (히스토리 표가 흰색으로 떠보이는 문제 해결)
         style = ttk.Style()
         try:
             style.theme_use("default")
         except Exception:
             pass
 
-        mode = ctk.get_appearance_mode()  # "Light" | "Dark"
+        mode = ctk.get_appearance_mode()
         dark = (mode.lower() == "dark")
 
-        bg = "#1E1E1E" if dark else "#F2F2F2"       # 표 본문 배경
-        fg = "#FFFFFF" if dark else "#000000"       # 표 본문 글자
-        sel_bg = "#2D6CDF" if dark else "#CDE1FF"   # 선택 배경
-        sel_fg = "#FFFFFF" if dark else "#000000"   # 선택 글자
-        head_bg = "#2A2A2A" if dark else "#E6E6E6"  # 헤더 배경
-        head_fg = "#FFFFFF" if dark else "#000000"  # 헤더 글자
+        bg = "#1E1E1E" if dark else "#F2F2F2"
+        fg = "#FFFFFF" if dark else "#000000"
+        sel_bg = "#2D6CDF" if dark else "#CDE1FF"
+        sel_fg = "#FFFFFF" if dark else "#000000"
+        head_bg = "#2A2A2A" if dark else "#E6E6E6"
+        head_fg = "#FFFFFF" if dark else "#000000"
         border = "#333333" if dark else "#C0C0C0"
 
         style.configure(
@@ -254,18 +258,17 @@ class App(ctk.CTk):
     # 🔹 히스토리 목록 갱신 (검색/정렬 반영)
     # -----------------------------
     def _hist_refresh(self):
-        # UI 선택값을 내부 코드로 변환
         label = self.var_sort.get()
         sort_mode = next((code for text, code in SORT_CHOICES if text == label), "time_desc")
         query = self.var_search.get()
 
-        # 필터링/정렬된 리스트 반영
         self._hist_view = self.hist.list_items(query=query, sort_mode=sort_mode)
 
         for iid in self.tree.get_children():
             self.tree.delete(iid)
         for idx, item in enumerate(self._hist_view):
             bases = f"{item.base_from}→{item.base_to}"
+            # iid를 현재 뷰 인덱스로 넣어서 선택 삭제에 활용
             self.tree.insert("", "end", iid=str(idx), values=(item.expr, bases, item.result))
 
     # -----------------------------
@@ -301,7 +304,6 @@ class App(ctk.CTk):
         if not sel:
             return
         idx = int(sel[0])
-        # 필터링된 뷰 기준으로 로드
         if not (0 <= idx < len(self._hist_view)):
             return
         item = self._hist_view[idx]
@@ -310,6 +312,27 @@ class App(ctk.CTk):
         self.var_to.set(str(item.base_to))
         self._recompute(add_history=False)
         self.status.configure(text="히스토리에서 불러옴")
+
+    # 🔹 선택 삭제
+    def on_hist_delete(self):
+        sel = self.tree.selection()
+        if not sel:
+            messagebox.showinfo("알림", "삭제할 항목을 선택하세요.")
+            return
+        idx = int(sel[0])
+        if not (0 <= idx < len(self._hist_view)):
+            return
+        item = self._hist_view[idx]
+        self.hist.remove_item(item)
+        self._hist_refresh()
+        self.status.configure(text="선택 항목 삭제됨")
+
+    # 🔹 전체 삭제
+    def on_hist_clear(self):
+        if messagebox.askyesno("확인", "히스토리를 모두 삭제할까요?"):
+            self.hist.clear()
+            self._hist_refresh()
+            self.status.configure(text="히스토리 초기화됨")
 
     def on_convert(self):
         self._recompute(add_history=True)
@@ -337,7 +360,6 @@ class App(ctk.CTk):
             messagebox.showerror("변환 실패", f"{T.ERR_INVALID}\n\n{e}")
             return
 
-        # 결과 출력
         self.var_result.set(out)
         self.txt_steps.configure(state="normal")
         self.txt_steps.delete("1.0", "end")
@@ -345,7 +367,6 @@ class App(ctk.CTk):
             self.txt_steps.insert("end", s + "\n")
         self.txt_steps.configure(state="disabled")
 
-        # 요약 (2/8/10/16)
         try:
             if any(c in expr for c in "+-*/()"):
                 dec, _ = evaluate_expression(expr, base_from, precision=precision, round_mode=round_mode)
