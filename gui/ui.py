@@ -11,6 +11,18 @@ MIN_W, MIN_H = 900, 560
 MAX_W, MAX_H = 1600, 1000
 
 ROUND_CHOICES = ["HALF_UP", "HALF_DOWN", "HALF_EVEN", "CEILING", "FLOOR"]
+SORT_CHOICES = [
+    ("최신순", "time_desc"),
+    ("오래된순", "time_asc"),
+    ("입력 A→Z", "expr_asc"),
+    ("입력 Z→A", "expr_desc"),
+    ("결과 A→Z", "result_asc"),
+    ("결과 Z→A", "result_desc"),
+    ("입력진법 ↑", "bfrom_asc"),
+    ("입력진법 ↓", "bfrom_desc"),
+    ("출력진법 ↑", "bto_asc"),
+    ("출력진법 ↓", "bto_desc"),
+]
 
 
 class App(ctk.CTk):
@@ -22,6 +34,7 @@ class App(ctk.CTk):
         self.title(T.APP_TITLE)
         self._init_window_size()
         self.hist = HistoryStore()
+        self._hist_view = []  # 현재 화면에 표시 중인 히스토리(검색/정렬 반영본)
 
         self._build_panes()
         self._style_treeview()
@@ -129,9 +142,25 @@ class App(ctk.CTk):
         # RIGHT (히스토리)
         self.right.grid_columnconfigure(0, weight=1)
         self.right.grid_rowconfigure(1, weight=1)
+
         head = ctk.CTkFrame(self.right, fg_color="transparent")
-        head.grid(row=0, column=0, sticky="ew")
-        ctk.CTkLabel(head, text=T.LBL_HISTORY).pack(side="left")
+        head.grid(row=0, column=0, sticky="ew", padx=(0, 0), pady=(0, 6))
+        head.grid_columnconfigure(0, weight=1)
+
+        # 검색 + 정렬 컨트롤
+        search_wrap = ctk.CTkFrame(head, fg_color="transparent")
+        search_wrap.pack(side="top", fill="x")
+        ctk.CTkLabel(search_wrap, text="검색").pack(side="left", padx=(0, 6))
+        self.var_search = tk.StringVar(value="")
+        ent_search = ctk.CTkEntry(search_wrap, textvariable=self.var_search, width=160, placeholder_text="입력/결과로 검색")
+        ent_search.pack(side="left")
+        ent_search.bind("<KeyRelease>", lambda e: self._hist_refresh())
+
+        ctk.CTkLabel(search_wrap, text="정렬").pack(side="left", padx=(12, 6))
+        self.var_sort = tk.StringVar(value=SORT_CHOICES[0][0])
+        self.cmb_sort = ctk.CTkComboBox(search_wrap, values=[x[0] for x in SORT_CHOICES], variable=self.var_sort, width=120)
+        self.cmb_sort.pack(side="left")
+        self.cmb_sort.bind("<<ComboboxSelected>>", lambda e: self._hist_refresh())
 
         wrap = ctk.CTkFrame(self.right)
         wrap.grid(row=1, column=0, sticky="nsew")
@@ -181,10 +210,21 @@ class App(ctk.CTk):
         self.txt_steps.insert("end", T.HINT)
         self.txt_steps.configure(state="disabled")
 
+    # -----------------------------
+    # 🔹 히스토리 목록 갱신 (검색/정렬 반영)
+    # -----------------------------
     def _hist_refresh(self):
+        # UI 선택값을 내부 코드로 변환
+        label = self.var_sort.get()
+        sort_mode = next((code for text, code in SORT_CHOICES if text == label), "time_desc")
+        query = self.var_search.get()
+
+        # 필터링/정렬된 리스트 반영
+        self._hist_view = self.hist.list_items(query=query, sort_mode=sort_mode)
+
         for iid in self.tree.get_children():
             self.tree.delete(iid)
-        for idx, item in enumerate(self.hist.items):
+        for idx, item in enumerate(self._hist_view):
             bases = f"{item.base_from}→{item.base_to}"
             self.tree.insert("", "end", iid=str(idx), values=(item.expr, bases, item.result))
 
@@ -221,9 +261,10 @@ class App(ctk.CTk):
         if not sel:
             return
         idx = int(sel[0])
-        item = self.hist.get(idx)
-        if not item:
+        # 필터링된 뷰 기준으로 로드
+        if not (0 <= idx < len(self._hist_view)):
             return
+        item = self._hist_view[idx]
         self.var_input.set(item.expr)
         self.var_from.set(str(item.base_from))
         self.var_to.set(str(item.base_to))
