@@ -1,8 +1,7 @@
-# gui/ui.py
 import re
 import tkinter as tk
 import customtkinter as ctk
-from tkinter import ttk, messagebox, END, Scrollbar
+from tkinter import ttk, messagebox, END, Scrollbar, filedialog
 
 from gui import ui_text as T
 from history.store import HistoryStore, HistoryItem
@@ -35,17 +34,15 @@ class App(ctk.CTk):
         self.title(T.APP_TITLE)
         self._init_window_size()
         self.hist = HistoryStore()
-        self._hist_view = []  # 현재 화면에 표시 중인 히스토리(검색/정렬 반영본)
+        self._hist_view = []
 
         self._build_panes()
-        self._style_treeview()  # Treeview 색상 통일
+        self._style_treeview()
         self._init_hint()
 
         self.after(100, self._hist_refresh)
         self.ent_input.bind("<Return>", lambda e: self.on_convert())
 
-    # -----------------------------
-    # 🔹 윈도우 초기 설정
     # -----------------------------
     def _init_window_size(self):
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
@@ -56,9 +53,6 @@ class App(ctk.CTk):
         self.geometry(f"{gw}x{gh}+{x}+{y}")
         self.minsize(MIN_W, MIN_H)
 
-    # -----------------------------
-    # 🔹 전체 UI 구성
-    # -----------------------------
     def _build_panes(self):
         pw = tk.PanedWindow(self, orient="horizontal", sashwidth=8, opaqueresize=True)
         pw.pack(side="top", fill="both", expand=True, padx=12, pady=12)
@@ -70,20 +64,17 @@ class App(ctk.CTk):
         pw.add(self.mid, minsize=320)
         pw.add(self.right, minsize=300)
 
-        # LEFT 영역 (입력 + 설정 + 결과)
         self.left.grid_columnconfigure(0, weight=1)
 
         inp = ctk.CTkFrame(self.left)
         inp.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         inp.grid_columnconfigure(10, weight=1)
 
-        # 입력 박스
         ctk.CTkLabel(inp, text=T.LBL_INPUT).grid(row=0, column=0, sticky="w")
         self.var_input = tk.StringVar(value="")
         self.ent_input = ctk.CTkEntry(inp, textvariable=self.var_input, placeholder_text="예: 1011.01 또는 (A.F + 10)")
         self.ent_input.grid(row=1, column=0, columnspan=11, sticky="ew", pady=(2, 8))
 
-        # 진법 선택
         ctk.CTkLabel(inp, text=T.LBL_FROM).grid(row=2, column=0, sticky="w")
         self.var_from = tk.StringVar(value="10")
         self.cmb_from = ctk.CTkComboBox(inp, values=T.BASES, variable=self.var_from, width=90)
@@ -94,19 +85,16 @@ class App(ctk.CTk):
         self.cmb_to = ctk.CTkComboBox(inp, values=T.BASES, variable=self.var_to, width=90)
         self.cmb_to.grid(row=3, column=1, sticky="w", padx=(6, 0))
 
-        # 정밀도 옵션
         ctk.CTkLabel(inp, text="정밀도").grid(row=2, column=2, sticky="w")
         self.var_prec = tk.IntVar(value=12)
         self.ent_prec = ctk.CTkEntry(inp, textvariable=self.var_prec, width=60)
         self.ent_prec.grid(row=3, column=2, sticky="w", padx=(2, 8))
 
-        # 반올림 모드 드롭다운
         ctk.CTkLabel(inp, text="반올림").grid(row=2, column=3, sticky="w")
         self.var_round = tk.StringVar(value="HALF_UP")
         self.cmb_round = ctk.CTkComboBox(inp, values=ROUND_CHOICES, variable=self.var_round, width=120)
         self.cmb_round.grid(row=3, column=3, sticky="w", padx=(2, 8))
 
-        # 버튼들
         self.btn_convert = ctk.CTkButton(inp, text=T.BTN_CONVERT, command=self.on_convert, width=110)
         self.btn_convert.grid(row=3, column=4, padx=(12, 6))
         self.btn_swap = ctk.CTkButton(inp, text=T.BTN_SWAP, command=self.on_swap, width=70)
@@ -114,7 +102,6 @@ class App(ctk.CTk):
         self.btn_clear = ctk.CTkButton(inp, text=T.BTN_CLEAR, command=self.on_clear, width=80)
         self.btn_clear.grid(row=3, column=6, padx=6)
 
-        # 결과 영역
         ctk.CTkLabel(self.left, text=T.LBL_RESULT).grid(row=4, column=0, sticky="w")
         res_row = ctk.CTkFrame(self.left)
         res_row.grid(row=5, column=0, sticky="ew", pady=(2, 6))
@@ -123,16 +110,14 @@ class App(ctk.CTk):
         self.ent_result = ctk.CTkEntry(res_row, textvariable=self.var_result, state="readonly")
         self.ent_result.grid(row=0, column=0, sticky="ew")
         ctk.CTkButton(res_row, text=T.BTN_COPY, width=60,
-                      command=lambda: self._copy_to_clip(self.ent_result.get())).grid(row=0, column=1, padx=(6, 0))
+                    command=lambda: self._copy_to_clip(self.ent_result.get())).grid(row=0, column=1, padx=(6, 0))
 
-        # 요약 영역 (2,8,10,16진)
         ctk.CTkLabel(self.left, text=T.LBL_SUMMARY).grid(row=6, column=0, sticky="w", pady=(6, 2))
         self.sum2 = self._mk_sum_row(self.left, 7, "2진")
         self.sum8 = self._mk_sum_row(self.left, 8, "8진")
         self.sum10 = self._mk_sum_row(self.left, 9, "10진")
         self.sum16 = self._mk_sum_row(self.left, 10, "16진")
 
-        # MID (변환 과정)
         self.mid.grid_columnconfigure(0, weight=1)
         self.mid.grid_rowconfigure(1, weight=1)
         self.lbl_steps = ctk.CTkLabel(self.mid, text=T.LBL_STEPS)
@@ -140,15 +125,13 @@ class App(ctk.CTk):
         self.txt_steps = ctk.CTkTextbox(self.mid, wrap="word")
         self.txt_steps.grid(row=1, column=0, sticky="nsew")
 
-        # RIGHT (히스토리)
         self.right.grid_columnconfigure(0, weight=1)
-        self.right.grid_rowconfigure(2, weight=1)
+        self.right.grid_rowconfigure(3, weight=1)
 
         head = ctk.CTkFrame(self.right, fg_color="transparent")
         head.grid(row=0, column=0, sticky="ew", padx=(0, 0), pady=(0, 6))
         head.grid_columnconfigure(0, weight=1)
 
-        # 검색 + 정렬 컨트롤
         search_wrap = ctk.CTkFrame(head, fg_color="transparent")
         search_wrap.pack(side="top", fill="x")
         ctk.CTkLabel(search_wrap, text="검색").pack(side="left", padx=(0, 6))
@@ -163,11 +146,12 @@ class App(ctk.CTk):
         self.cmb_sort.pack(side="left")
         self.cmb_sort.bind("<<ComboboxSelected>>", lambda e: self._hist_refresh())
 
-        # 🔹 히스토리 제어 버튼 (선택삭제 / 전체삭제)
         control_wrap = ctk.CTkFrame(self.right, fg_color="transparent")
         control_wrap.grid(row=1, column=0, sticky="ew", padx=(0, 0), pady=(0, 4))
         ctk.CTkButton(control_wrap, text="선택삭제", width=80, command=self.on_hist_delete).pack(side="left", padx=(0,6))
-        ctk.CTkButton(control_wrap, text="전체삭제", width=80, command=self.on_hist_clear).pack(side="left")
+        ctk.CTkButton(control_wrap, text="전체삭제", width=80, command=self.on_hist_clear).pack(side="left", padx=(0,6))
+        ctk.CTkButton(control_wrap, text="CSV로 내보내기", width=120, command=self.on_hist_export).pack(side="right")
+        ctk.CTkButton(control_wrap, text="CSV 가져오기", width=110, command=self.on_hist_import).pack(side="right", padx=(0,6))
 
         wrap = ctk.CTkFrame(self.right)
         wrap.grid(row=2, column=0, sticky="nsew")
@@ -192,9 +176,6 @@ class App(ctk.CTk):
         self.status = ctk.CTkLabel(self, text="")
         self.status.pack(side="bottom", fill="x", padx=12, pady=(0, 6))
 
-    # -----------------------------
-    # 🔹 요약 행 생성
-    # -----------------------------
     def _mk_sum_row(self, parent, r, label):
         fr = ctk.CTkFrame(parent)
         fr.grid(row=r, column=0, sticky="ew", pady=2)
@@ -203,7 +184,7 @@ class App(ctk.CTk):
         entry = ctk.CTkEntry(fr, state="readonly")
         entry.grid(row=0, column=1, sticky="ew")
         ctk.CTkButton(fr, text=T.BTN_COPY, width=60,
-                      command=lambda e=entry: self._copy_to_clip(e.get())).grid(row=0, column=2, padx=(6, 0))
+                    command=lambda e=entry: self._copy_to_clip(e.get())).grid(row=0, column=2, padx=(6, 0))
         return entry
 
     def _style_treeview(self):
@@ -245,8 +226,8 @@ class App(ctk.CTk):
             relief="flat"
         )
         style.map("Treeview.Heading",
-                  background=[("active", head_bg)],
-                  foreground=[("active", head_fg)])
+                background=[("active", head_bg)],
+                foreground=[("active", head_fg)])
 
     def _init_hint(self):
         self.txt_steps.configure(state="normal")
@@ -254,9 +235,6 @@ class App(ctk.CTk):
         self.txt_steps.insert("end", T.HINT)
         self.txt_steps.configure(state="disabled")
 
-    # -----------------------------
-    # 🔹 히스토리 목록 갱신 (검색/정렬 반영)
-    # -----------------------------
     def _hist_refresh(self):
         label = self.var_sort.get()
         sort_mode = next((code for text, code in SORT_CHOICES if text == label), "time_desc")
@@ -268,12 +246,8 @@ class App(ctk.CTk):
             self.tree.delete(iid)
         for idx, item in enumerate(self._hist_view):
             bases = f"{item.base_from}→{item.base_to}"
-            # iid를 현재 뷰 인덱스로 넣어서 선택 삭제에 활용
             self.tree.insert("", "end", iid=str(idx), values=(item.expr, bases, item.result))
 
-    # -----------------------------
-    # 🔹 이벤트 처리
-    # -----------------------------
     def _copy_to_clip(self, text: str):
         if not text:
             return
@@ -311,9 +285,9 @@ class App(ctk.CTk):
         self.var_from.set(str(item.base_from))
         self.var_to.set(str(item.base_to))
         self._recompute(add_history=False)
-        self.status.configure(text="히스토리에서 불러옴")
+        self._copy_to_clip(self.var_result.get())
+        self.status.configure(text="불러오기 + 결과 복사 완료")
 
-    # 🔹 선택 삭제
     def on_hist_delete(self):
         sel = self.tree.selection()
         if not sel:
@@ -327,19 +301,52 @@ class App(ctk.CTk):
         self._hist_refresh()
         self.status.configure(text="선택 항목 삭제됨")
 
-    # 🔹 전체 삭제
     def on_hist_clear(self):
         if messagebox.askyesno("확인", "히스토리를 모두 삭제할까요?"):
             self.hist.clear()
             self._hist_refresh()
             self.status.configure(text="히스토리 초기화됨")
 
+    def on_hist_export(self):
+        path = filedialog.asksaveasfilename(
+            title="CSV로 내보내기",
+            defaultextension=".csv",
+            filetypes=[("CSV 파일", "*.csv"), ("모든 파일", "*.*")],
+            initialfile="history.csv"
+        )
+        if not path:
+            return
+        try:
+            self.hist.export_csv(path, self._hist_view)
+            messagebox.showinfo("완료", "히스토리를 CSV로 저장했습니다.")
+        except Exception as e:
+            messagebox.showerror("오류", f"CSV 저장에 실패했습니다.\n{e}")
+
+    def on_hist_import(self):
+        path = filedialog.askopenfilename(
+            title="CSV 가져오기",
+            filetypes=[("CSV 파일", "*.csv"), ("모든 파일", "*.*")]
+        )
+        if not path:
+            return
+
+        ans = messagebox.askyesnocancel("가져오기 모드 선택",
+                                        "예: 기존 히스토리에 추가(append)\n아니오: 기존 히스토리를 대체(replace)\n취소: 중단")
+        if ans is None:
+            return
+        mode = "append" if ans else "replace"
+
+        try:
+            self.hist.import_csv(path, mode=mode)
+            self._hist_refresh()
+            msg = "추가 완료" if mode == "append" else "대체 완료"
+            messagebox.showinfo("완료", f"CSV {msg}되었습니다.")
+        except Exception as e:
+            messagebox.showerror("오류", f"CSV 가져오기에 실패했습니다.\n{e}")
+
     def on_convert(self):
         self._recompute(add_history=True)
 
-    # -----------------------------
-    # 🔹 핵심 변환 로직
-    # -----------------------------
     def _recompute(self, add_history: bool):
         expr = self.var_input.get().strip()
         if not expr:
