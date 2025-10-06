@@ -1,281 +1,470 @@
-# converter/logic.py
-from __future__ import annotations
-from decimal import Decimal
-from fractions import Fraction
-from typing import List, Tuple
+# gui/ui.py
+import re
+import tkinter as tk
+import customtkinter as ctk
+from tkinter import ttk, messagebox, END, Scrollbar, filedialog
 
-from converter.utils import (
-    set_decimal_context, sanitize_expr, tokenize, shunting_yard,
-    is_digit_for_base, value_of_digit, DIGITS
-)
+from gui import ui_text as T
+from history.store import HistoryStore, HistoryItem
+from converter.logic import convert, to_decimal, from_decimal, evaluate_expression
 
-# -----------------------------
-# 내부 유틸: 정수부 변환
-# -----------------------------
-def _int_to_base_str(n: int, base: int) -> str:
-    if n == 0:
-        return "0"
-    s = []
-    x = n
-    while x > 0:
-        s.append(DIGITS[x % base])
-        x //= base
-    return "".join(reversed(s))
+MIN_W, MIN_H = 900, 560
+MAX_W, MAX_H = 1600, 1000
 
-# -----------------------------
-# 내부 유틸: Fraction → base 진수 문자열 (순환소수 표기)
-#  - 정수부 + '.' + 소수부
-#  - 순환 발견 시, 순환 구간을 괄호로 표기: 0.(3), 1.2(34) 등
-#  - remainder 방문 위치를 기억하여 사이클 검출
-# -----------------------------
-def _fraction_to_base(fr: Fraction, base: int, precision: int = 12) -> Tuple[str, List[str]]:
-    steps: List[str] = []
-    if base < 2 or base > 36:
-        raise ValueError("base must be 2..36")
+ROUND_CHOICES = ["HALF_UP", "HALF_DOWN", "HALF_EVEN", "CEILING", "FLOOR"]
+SORT_CHOICES = [
+    ("최신순", "time_desc"),
+    ("오래된순", "time_asc"),
+    ("입력 A→Z", "expr_asc"),
+    ("입력 Z→A", "expr_desc"),
+    ("결과 A→Z", "result_asc"),
+    ("결과 Z→A", "result_desc"),
+    ("입력진법 ↑", "bfrom_asc"),
+    ("입력진법 ↓", "bfrom_desc"),
+    ("출력진법 ↑", "bto_asc"),
+    ("출력진법 ↓", "bto_desc"),
+]
 
-    sign = "-" if fr < 0 else ""
-    fr = -fr if fr < 0 else fr
+CASE_CHOICES = ["UPPER", "lower"]
+GROUP_CHOICES = ["없음", "4자리"]
+SEP_CHOICES = ["공백", "언더스코어(_ )"]
 
-    ip = fr.numerator // fr.denominator              # 정수부 (10진)
-    rp = fr.numerator % fr.denominator               # 나머지 (소수부용)
-    steps.append(f"[frac->base] input={fr} sign={'-' if sign else '+'}, int={ip}, rem={rp}/{fr.denominator}")
+class App(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        ctk.set_appearance_mode("system")
+        ctk.set_default_color_theme("blue")
 
-    int_part_str = _int_to_base_str(ip, base)
+        self.title(T.APP_TITLE)
+        self._init_window_size()
+        self.hist = HistoryStore()
+        self._hist_view = []  # 현재 화면에 표시 중 뷰(검색/정렬 반영본)
 
-    if rp == 0:
-        # 정확히 나누어 떨어지는 경우
-        out = sign + int_part_str
-        steps.append(f"[frac->base] exact integer → {out} ({base}진)")
-        return out, steps
+        self._build_panes()
+        self._style_treeview()
+        self._init_hint()
 
-    # 소수부: long division in base, with cycle detection
-    digits: List[str] = []
-    seen = {}  # remainder -> index in digits
-    cycle_start = None
+        self.after(100, self._hist_refresh)
+        self.ent_input.bind("<Return>", lambda e: self.on_convert())
 
-    rem = rp
-    den = fr.denominator
-    idx = 0
-    while rem != 0:
-        if rem in seen:
-            cycle_start = seen[rem]
-            steps.append(f"[frac->base] repeat remainder={rem} at index={cycle_start}")
-            break
-        seen[rem] = idx
+    # -----------------------------
+    def _init_window_size(self):
+        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+        gw, gh = int(sw * 0.6), int(sh * 0.65)
+        gw = max(MIN_W, min(gw, MAX_W))
+        gh = max(MIN_H, min(gh, MAX_H))
+        x, y = (sw - gw) // 2, (sh - gh) // 2
+        self.geometry(f"{gw}x{gh}+{x}+{y}")
+        self.minsize(MIN_W, MIN_H)
 
-        rem *= base
-        digit = rem // den
-        rem = rem % den
-        digits.append(DIGITS[int(digit)])
-        idx += 1
+    # -----------------------------
+    def _build_panes(self):
+        pw = tk.PanedWindow(self, orient="horizontal", sashwidth=8, opaqueresize=True)
+        pw.pack(side="top", fill="both", expand=True, padx=12, pady=12)
 
-        # 만약 순환이 없고 너무 길어지는 걸 방지: (precision이 안전 가드)
-        # 순환이 감지되면 precision 제한을 무시하고 사이클 표기
-        if cycle_start is None and idx >= max(precision, 1) and rem not in seen:
-            # 반복이 없는 한도에서 precision만큼만 자름
-            steps.append(f"[frac->base] reached precision (no cycle detected)")
-            break
+        self.left = ctk.CTkFrame(pw)
+        self.mid = ctk.CTkFrame(pw)
+        self.right = ctk.CTkFrame(pw)
+        pw.add(self.left, minsize=420)
+        pw.add(self.mid, minsize=320)
+        pw.add(self.right, minsize=300)
 
-    if cycle_start is not None:
-        # 순환 구간 괄호 표기
-        nonrep = "".join(digits[:cycle_start])
-        rep = "".join(digits[cycle_start:])
-        frac_part = f"{nonrep}({rep})"
-    else:
-        frac_part = "".join(digits)
+        # LEFT
+        self.left.grid_columnconfigure(0, weight=1)
 
-    out = f"{sign}{int_part_str}.{frac_part}"
-    steps.append(f"[frac->base] out={out} ({base}진)")
-    return out, steps
+        inp = ctk.CTkFrame(self.left)
+        inp.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        inp.grid_columnconfigure(10, weight=1)
 
-# -----------------------------
-# 기존: 문자열을 base에서 10진 Decimal로
-#  - 외부 호환을 위해 유지 (GUI 요약용)
-#  - 내부 계산은 Fraction 기반으로 변경됨
-# -----------------------------
-def to_decimal(num_str: str, base_from: int):
-    num_str = sanitize_expr(num_str)
-    if "." in num_str:
-        int_part, frac_part = num_str.split(".")
-    else:
-        int_part, frac_part = num_str, ""
+        ctk.CTkLabel(inp, text=T.LBL_INPUT).grid(row=0, column=0, sticky="w")
+        self.var_input = tk.StringVar(value="")
+        self.ent_input = ctk.CTkEntry(inp, textvariable=self.var_input, placeholder_text="예: 1011.01 또는 (A.F + 10)")
+        self.ent_input.grid(row=1, column=0, columnspan=11, sticky="ew", pady=(2, 8))
 
-    # 검증
-    if int_part == "" and frac_part == "":
-        raise ValueError("빈 숫자입니다.")
-    if int_part and any(not is_digit_for_base(ch, base_from) for ch in int_part):
-        raise ValueError(f"{base_from}진수에 맞지 않는 자리수가 포함되어 있습니다: {num_str}")
-    if frac_part and any(not is_digit_for_base(ch, base_from) for ch in frac_part):
-        raise ValueError(f"{base_from}진수에 맞지 않는 자리수가 포함되어 있습니다: {num_str}")
+        ctk.CTkLabel(inp, text=T.LBL_FROM).grid(row=2, column=0, sticky="w")
+        self.var_from = tk.StringVar(value="10")
+        self.cmb_from = ctk.CTkComboBox(inp, values=T.BASES, variable=self.var_from, width=90)
+        self.cmb_from.grid(row=3, column=0, sticky="w")
 
-    # 정수부
-    value = Decimal(0)
-    for i, ch in enumerate(int_part[::-1]):
-        if ch == "":
-            continue
-        d = value_of_digit(ch)
-        value += d * (base_from ** i)
+        ctk.CTkLabel(inp, text=T.LBL_TO).grid(row=2, column=1, sticky="w")
+        self.var_to = tk.StringVar(value="2")
+        self.cmb_to = ctk.CTkComboBox(inp, values=T.BASES, variable=self.var_to, width=90)
+        self.cmb_to.grid(row=3, column=1, sticky="w", padx=(6, 0))
 
-    # 소수부
-    for i, ch in enumerate(frac_part, start=1):
-        d = value_of_digit(ch)
-        value += Decimal(d) / (base_from ** i)
+        ctk.CTkLabel(inp, text="정밀도").grid(row=2, column=2, sticky="w")
+        self.var_prec = tk.IntVar(value=12)
+        self.ent_prec = ctk.CTkEntry(inp, textvariable=self.var_prec, width=60)
+        self.ent_prec.grid(row=3, column=2, sticky="w", padx=(2, 8))
 
-    return value, [f"[to_decimal] {num_str} ({base_from}진) → {value}"]
+        ctk.CTkLabel(inp, text="반올림").grid(row=2, column=3, sticky="w")
+        self.var_round = tk.StringVar(value="HALF_UP")
+        self.cmb_round = ctk.CTkComboBox(inp, values=ROUND_CHOICES, variable=self.var_round, width=120)
+        self.cmb_round.grid(row=3, column=3, sticky="w", padx=(2, 8))
 
-# -----------------------------
-# Fraction/Decimal → base 진수 문자열
-#  - 내부는 Fraction 우선, Decimal이 오면 Fraction으로 변환 시도
-# -----------------------------
-def from_decimal(dec_val, base_to: int, precision=12):
-    steps: List[str] = []
-    if isinstance(dec_val, Fraction):
-        fr = dec_val
-        steps.append(f"[from_decimal] Fraction input={fr}")
-    else:
-        # Decimal/숫자 → Fraction 근사 (정밀도 내에서)
+        # ---- 출력 서식 옵션 ----
+        fmt_fr = ctk.CTkFrame(self.left)
+        fmt_fr.grid(row=4, column=0, sticky="ew", pady=(2, 8))
+        fmt_fr.grid_columnconfigure(10, weight=1)
+
+        ctk.CTkLabel(fmt_fr, text="서식").grid(row=0, column=0, sticky="w", padx=(0,6))
+
+        # 대/소문자
+        ctk.CTkLabel(fmt_fr, text="문자").grid(row=0, column=1, sticky="w")
+        self.var_case = tk.StringVar(value=CASE_CHOICES[0])
+        self.cmb_case = ctk.CTkComboBox(fmt_fr, values=CASE_CHOICES, variable=self.var_case, width=85)
+        self.cmb_case.grid(row=0, column=2, sticky="w", padx=(2, 10))
+
+        # 그룹
+        ctk.CTkLabel(fmt_fr, text="그룹").grid(row=0, column=3, sticky="w")
+        self.var_group = tk.StringVar(value=GROUP_CHOICES[0])
+        self.cmb_group = ctk.CTkComboBox(fmt_fr, values=GROUP_CHOICES, variable=self.var_group, width=85)
+        self.cmb_group.grid(row=0, column=4, sticky="w", padx=(2, 10))
+
+        # 구분자
+        ctk.CTkLabel(fmt_fr, text="구분자").grid(row=0, column=5, sticky="w")
+        self.var_sep = tk.StringVar(value=SEP_CHOICES[0])
+        self.cmb_sep = ctk.CTkComboBox(fmt_fr, values=SEP_CHOICES, variable=self.var_sep, width=120)
+        self.cmb_sep.grid(row=0, column=6, sticky="w", padx=(2, 10))
+
+        # 접두어
+        self.var_prefix = tk.BooleanVar(value=False)
+        self.chk_prefix = ctk.CTkCheckBox(fmt_fr, text="접두어(0x/0b/0o)", variable=self.var_prefix)
+        self.chk_prefix.grid(row=0, column=7, sticky="w")
+
+        # 버튼들
+        self.btn_convert = ctk.CTkButton(inp, text=T.BTN_CONVERT, command=self.on_convert, width=110)
+        self.btn_convert.grid(row=3, column=4, padx=(12, 6))
+        self.btn_swap = ctk.CTkButton(inp, text=T.BTN_SWAP, command=self.on_swap, width=70)
+        self.btn_swap.grid(row=3, column=5, padx=6)
+        self.btn_clear = ctk.CTkButton(inp, text=T.BTN_CLEAR, command=self.on_clear, width=80)
+        self.btn_clear.grid(row=3, column=6, padx=6)
+
+        # 결과 영역
+        ctk.CTkLabel(self.left, text=T.LBL_RESULT).grid(row=5, column=0, sticky="w")
+        res_row = ctk.CTkFrame(self.left)
+        res_row.grid(row=6, column=0, sticky="ew", pady=(2, 6))
+        res_row.grid_columnconfigure(0, weight=1)
+        self.var_result = tk.StringVar(value="")
+        self.ent_result = ctk.CTkEntry(res_row, textvariable=self.var_result, state="readonly")
+        self.ent_result.grid(row=0, column=0, sticky="ew")
+        ctk.CTkButton(res_row, text=T.BTN_COPY, width=60,
+                      command=lambda: self._copy_to_clip(self.ent_result.get())).grid(row=0, column=1, padx=(6, 0))
+
+        # 요약 영역 (2,8,10,16진)
+        ctk.CTkLabel(self.left, text=T.LBL_SUMMARY).grid(row=7, column=0, sticky="w", pady=(6, 2))
+        self.sum2 = self._mk_sum_row(self.left, 8, "2진")
+        self.sum8 = self._mk_sum_row(self.left, 9, "8진")
+        self.sum10 = self._mk_sum_row(self.left, 10, "10진")
+        self.sum16 = self._mk_sum_row(self.left, 11, "16진")
+
+        # MID
+        self.mid.grid_columnconfigure(0, weight=1)
+        self.mid.grid_rowconfigure(1, weight=1)
+        self.lbl_steps = ctk.CTkLabel(self.mid, text=T.LBL_STEPS)
+        self.lbl_steps.grid(row=0, column=0, sticky="w")
+        self.txt_steps = ctk.CTkTextbox(self.mid, wrap="word")
+        self.txt_steps.grid(row=1, column=0, sticky="nsew")
+
+        # RIGHT (검색/정렬/컨트롤/테이블) — 이전 그대로
+        self.right.grid_columnconfigure(0, weight=1)
+        self.right.grid_rowconfigure(3, weight=1)
+
+        head = ctk.CTkFrame(self.right, fg_color="transparent")
+        head.grid(row=0, column=0, sticky="ew", padx=(0, 0), pady=(0, 6))
+        head.grid_columnconfigure(0, weight=1)
+
+        search_wrap = ctk.CTkFrame(head, fg_color="transparent")
+        search_wrap.pack(side="top", fill="x")
+        ctk.CTkLabel(search_wrap, text="검색").pack(side="left", padx=(0, 6))
+        self.var_search = tk.StringVar(value="")
+        ent_search = ctk.CTkEntry(search_wrap, textvariable=self.var_search, width=160, placeholder_text="입력/결과로 검색")
+        ent_search.pack(side="left")
+        ent_search.bind("<KeyRelease>", lambda e: self._hist_refresh())
+
+        ctk.CTkLabel(search_wrap, text="정렬").pack(side="left", padx=(12, 6))
+        self.var_sort = tk.StringVar(value=SORT_CHOICES[0][0])
+        self.cmb_sort = ctk.CTkComboBox(search_wrap, values=[x[0] for x in SORT_CHOICES], variable=self.var_sort, width=120)
+        self.cmb_sort.pack(side="left")
+        self.cmb_sort.bind("<<ComboboxSelected>>", lambda e: self._hist_refresh())
+
+        control_wrap = ctk.CTkFrame(self.right, fg_color="transparent")
+        control_wrap.grid(row=1, column=0, sticky="ew", padx=(0, 0), pady=(0, 4))
+        ctk.CTkButton(control_wrap, text="선택삭제", width=80, command=self.on_hist_delete).pack(side="left", padx=(0,6))
+        ctk.CTkButton(control_wrap, text="전체삭제", width=80, command=self.on_hist_clear).pack(side="left", padx=(0,6))
+        ctk.CTkButton(control_wrap, text="CSV로 내보내기", width=120, command=self.on_hist_export).pack(side="right")
+        ctk.CTkButton(control_wrap, text="CSV 가져오기", width=110, command=self.on_hist_import).pack(side="right", padx=(0,6))
+
+        wrap = ctk.CTkFrame(self.right)
+        wrap.grid(row=2, column=0, sticky="nsew")
+        wrap.grid_columnconfigure(0, weight=1)
+        wrap.grid_rowconfigure(0, weight=1)
+
+        self.tree = ttk.Treeview(wrap, columns=("expr", "bases", "result"), show="headings", selectmode="browse")
+        self.tree.heading("expr", text="입력")
+        self.tree.heading("bases", text="진법")
+        self.tree.heading("result", text="결과")
+        self.tree.column("expr", width=220, anchor="w")
+        self.tree.column("bases", width=80, anchor="center")
+        self.tree.column("result", width=170, anchor="w")
+        self.tree.grid(row=0, column=0, sticky="nsew")
+
+        sb = Scrollbar(wrap, orient="vertical", command=self.tree.yview)
+        sb.grid(row=0, column=1, sticky="ns")
+        self.tree.configure(yscrollcommand=sb.set)
+        self.tree.bind("<Double-1>", self.on_hist_load)
+        self.tree.bind("<Return>", self.on_hist_load)
+
+        self.status = ctk.CTkLabel(self, text="")
+        self.status.pack(side="bottom", fill="x", padx=12, pady=(0, 6))
+
+    # -----------------------------
+    def _mk_sum_row(self, parent, r, label):
+        fr = ctk.CTkFrame(parent)
+        fr.grid(row=r, column=0, sticky="ew", pady=2)
+        fr.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(fr, text=label, width=40).grid(row=0, column=0, sticky="w")
+        entry = ctk.CTkEntry(fr, state="readonly")
+        entry.grid(row=0, column=1, sticky="ew")
+        ctk.CTkButton(fr, text=T.BTN_COPY, width=60,
+                      command=lambda e=entry: self._copy_to_clip(e.get())).grid(row=0, column=2, padx=(6, 0))
+        return entry
+
+    def _style_treeview(self):
+        style = ttk.Style()
         try:
-            s = str(dec_val)
-            if "E" in s or "e" in s:
-                # 과학 표기 들어오면 Decimal → str → Fraction(문자열)로
-                fr = Fraction(s)
-            else:
-                # 소수점 문자열을 정확히 Fraction화
-                fr = Fraction(s)
+            style.theme_use("default")
         except Exception:
-            # 최후 수단: float 변환(권장X) — 가능한 피연산은 Fraction에서 들어오므로 거의 안씀
-            fr = Fraction(float(dec_val))
-        steps.append(f"[from_decimal] Decimal→Fraction: {fr}")
+            pass
 
-    out, st2 = _fraction_to_base(fr, base_to, precision=precision)
-    steps.extend(st2)
-    return out, steps
+        mode = ctk.get_appearance_mode()
+        dark = (mode.lower() == "dark")
 
-# -----------------------------
-# 내부: 토큰을 Fraction 값으로 변환 (base_from 기준)
-# -----------------------------
-def _token_to_fraction(tok: str, base_from: int) -> Fraction:
-    # "1A.F" 같은 숫자 토큰을 Fraction으로
-    if "." in tok:
-        int_part, frac_part = tok.split(".", 1)
-    else:
-        int_part, frac_part = tok, ""
+        bg = "#1E1E1E" if dark else "#F2F2F2"
+        fg = "#FFFFFF" if dark else "#000000"
+        sel_bg = "#2D6CDF" if dark else "#CDE1FF"
+        sel_fg = "#FFFFFF" if dark else "#000000"
+        head_bg = "#2A2A2A" if dark else "#E6E6E6"
+        head_fg = "#FFFFFF" if dark else "#000000"
+        border = "#333333" if dark else "#C0C0C0"
 
-    # 정수부
-    val = 0
-    for ch in int_part:
-        if ch == "":
-            continue
-        if not is_digit_for_base(ch, base_from):
-            raise ValueError(f"{base_from}진수에 맞지 않는 자리수가 포함되어 있습니다: {tok}")
-        val = val * base_from + value_of_digit(ch)
-    fr = Fraction(val, 1)
+        style.configure(
+            "Treeview",
+            background=bg,
+            fieldbackground=bg,
+            foreground=fg,
+            rowheight=24,
+            bordercolor=border,
+            borderwidth=0
+        )
+        style.map(
+            "Treeview",
+            background=[("selected", sel_bg)],
+            foreground=[("selected", sel_fg)]
+        )
+        style.configure(
+            "Treeview.Heading",
+            background=head_bg,
+            foreground=head_fg,
+            relief="flat"
+        )
+        style.map("Treeview.Heading",
+                  background=[("active", head_bg)],
+                  foreground=[("active", head_fg)])
 
-    # 소수부
-    den = 1
-    for ch in frac_part:
-        if not is_digit_for_base(ch, base_from):
-            raise ValueError(f"{base_from}진수에 맞지 않는 자리수가 포함되어 있습니다: {tok}")
-        den *= base_from
-        fr += Fraction(value_of_digit(ch), den)
-    return fr
+    def _init_hint(self):
+        self.txt_steps.configure(state="normal")
+        self.txt_steps.delete("1.0", "end")
+        self.txt_steps.insert("end", T.HINT)
+        self.txt_steps.configure(state="disabled")
 
-# -----------------------------
-# 연산 적용 (Fraction)
-# -----------------------------
-def _apply_unary_frac(op: str, a: Fraction) -> Fraction:
-    return a if op == "u+" else -a
+    # -----------------------------
+    def _hist_refresh(self):
+        label = self.var_sort.get()
+        sort_mode = next((code for text, code in SORT_CHOICES if text == label), "time_desc")
+        query = self.var_search.get()
 
-def _apply_binary_frac(op: str, a: Fraction, b: Fraction) -> Fraction:
-    if op == "+": return a + b
-    if op == "-": return a - b
-    if op == "*": return a * b
-    if op == "/":
-        if b == 0:
-            raise ZeroDivisionError("0으로 나눌 수 없습니다.")
-        return a / b
-    if op == "%":
-        if b == 0:
-            raise ZeroDivisionError("0으로 나눌 수 없습니다.")
-        # 분수 모듈러: a - floor(a/b)*b
-        q = a // b  # 정수 나눗셈
-        return a - q * b
-    if op == "^":
-        # 거듭제곱: 지수는 정수만 허용 (분수 지수는 정의 불명확)
-        if b.denominator != 1:
-            raise ValueError("분수 지수는 지원하지 않습니다.")
-        n = b.numerator
-        if n >= 0:
-            return a ** n
-        # 음의 지수도 허용 (a != 0)
-        if a == 0:
-            raise ZeroDivisionError("0의 음수 거듭제곱은 불가")
-        return Fraction(1, 1) / (a ** (-n))
-    raise ValueError(f"알 수 없는 연산자: {op}")
+        self._hist_view = self.hist.list_items(query=query, sort_mode=sort_mode)
 
-# -----------------------------
-# 안전 파서 기반 평가 (Fraction)
-# -----------------------------
-def evaluate_expression(expr: str, base_from: int, precision=12, round_mode="HALF_UP"):
-    """
-    Fraction 기반 안전 평가:
-     - 토큰화 → 셔닝야드(RPN) → 스택 계산(Fraction)
-     - 최종 결과는 Fraction으로 유지
-    """
-    # Decimal 컨텍스트는 외부 호환을 위해 맞춰두지만, 실제 계산은 Fraction
-    set_decimal_context(precision, round_mode)
-    expr = sanitize_expr(expr)
-    steps = [f"[evaluate] 식: {expr}"]
+        for iid in self.tree.get_children():
+            self.tree.delete(iid)
+        for idx, item in enumerate(self._hist_view):
+            bases = f"{item.base_from}→{item.base_to}"
+            self.tree.insert("", "end", iid=str(idx), values=(item.expr, bases, item.result))
 
-    # 1) 토큰화
-    tokens = tokenize(expr, base_from)
-    steps.append(f"[tokenize] {tokens}")
+    # -----------------------------
+    def _copy_to_clip(self, text: str):
+        if not text:
+            return
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(text)
+            self.status.configure(text="클립보드에 복사됨")
+        except Exception:
+            pass
 
-    # 2) RPN
-    rpn = shunting_yard(tokens)
-    steps.append(f"[rpn] {rpn}")
+    def on_swap(self):
+        f, t = self.var_from.get(), self.var_to.get()
+        self.var_from.set(t)
+        self.var_to.set(f)
 
-    # 3) RPN 평가 (Fraction)
-    stack: List[Fraction] = []
-    for t in rpn:
-        if t in {"u+", "u-", "+", "-", "*", "/", "%", "^"}:
-            if t in {"u+", "u-"}:
-                if not stack:
-                    raise ValueError("단항 연산 오류")
-                a = stack.pop()
-                stack.append(_apply_unary_frac(t, a))
+    def on_clear(self):
+        self.var_input.set("")
+        self.var_result.set("")
+        for e in (self.sum2, self.sum8, self.sum10, self.sum16):
+            e.configure(state="normal")
+            e.delete(0, END)
+            e.configure(state="readonly")
+        self._init_hint()
+        self.status.configure(text="")
+
+    # 더블클릭/Enter: 불러오고 결과 자동복사
+    def on_hist_load(self, event=None):
+        sel = self.tree.selection()
+        if not sel:
+            return
+        idx = int(sel[0])
+        if not (0 <= idx < len(self._hist_view)):
+            return
+        item = self._hist_view[idx]
+        self.var_input.set(item.expr)
+        self.var_from.set(str(item.base_from))
+        self.var_to.set(str(item.base_to))
+        self._recompute(add_history=False)
+        self._copy_to_clip(self.var_result.get())
+        self.status.configure(text="불러오기 + 결과 복사 완료")
+
+    def on_hist_delete(self):
+        sel = self.tree.selection()
+        if not sel:
+            messagebox.showinfo("알림", "삭제할 항목을 선택하세요.")
+            return
+        idx = int(sel[0])
+        if not (0 <= idx < len(self._hist_view)):
+            return
+        item = self._hist_view[idx]
+        self.hist.remove_item(item)
+        self._hist_refresh()
+        self.status.configure(text="선택 항목 삭제됨")
+
+    def on_hist_clear(self):
+        if messagebox.askyesno("확인", "히스토리를 모두 삭제할까요?"):
+            self.hist.clear()
+            self._hist_refresh()
+            self.status.configure(text="히스토리 초기화됨")
+
+    def on_hist_export(self):
+        path = filedialog.asksaveasfilename(
+            title="CSV로 내보내기",
+            defaultextension=".csv",
+            filetypes=[("CSV 파일", "*.csv"), ("모든 파일", "*.*")],
+            initialfile="history.csv"
+        )
+        if not path:
+            return
+        try:
+            self.hist.export_csv(path, self._hist_view)
+            messagebox.showinfo("완료", "히스토리를 CSV로 저장했습니다.")
+        except Exception as e:
+            messagebox.showerror("오류", f"CSV 저장에 실패했습니다.\n{e}")
+
+    def on_hist_import(self):
+        path = filedialog.askopenfilename(
+            title="CSV 가져오기",
+            filetypes=[("CSV 파일", "*.csv"), ("모든 파일", "*.*")]
+        )
+        if not path:
+            return
+
+        ans = messagebox.askyesnocancel("가져오기 모드 선택",
+                                        "예: 기존 히스토리에 추가(append)\n아니오: 기존 히스토리를 대체(replace)\n취소: 중단")
+        if ans is None:
+            return
+        mode = "append" if ans else "replace"
+
+        try:
+            self.hist.import_csv(path, mode=mode)
+            self._hist_refresh()
+            msg = "추가 완료" if mode == "append" else "대체 완료"
+            messagebox.showinfo("완료", f"CSV {msg}되었습니다.")
+        except Exception as e:
+            messagebox.showerror("오류", f"CSV 가져오기에 실패했습니다.\n{e}")
+
+    def on_convert(self):
+        self._recompute(add_history=True)
+
+    # -----------------------------
+    def _current_format(self):
+        # letter case
+        letter_case = "upper" if self.var_case.get() == "UPPER" else "lower"
+        # group size
+        group_size = 0 if self.var_group.get() == "없음" else 4
+        # separator
+        sep = " " if self.var_sep.get().startswith("공백") else "_"
+        use_prefix = bool(self.var_prefix.get())
+        return {
+            "letter_case": letter_case,
+            "group_size": group_size,
+            "group_sep": sep,
+            "prefix": use_prefix
+        }
+
+    def _recompute(self, add_history: bool):
+        expr = self.var_input.get().strip()
+        if not expr:
+            messagebox.showerror("오류", "입력 값이 비어 있습니다.")
+            return
+        try:
+            base_from = int(self.var_from.get())
+            base_to = int(self.var_to.get())
+            precision = int(self.var_prec.get())
+            round_mode = self.var_round.get().strip() or "HALF_UP"
+        except Exception:
+            messagebox.showerror("오류", "진법 또는 정밀도/반올림 설정이 잘못되었습니다.")
+            return
+
+        fmt = self._current_format()
+
+        try:
+            out, steps = convert(expr, base_from, base_to, precision=precision, round_mode_str=round_mode, fmt=fmt)
+        except Exception as e:
+            messagebox.showerror("변환 실패", f"{T.ERR_INVALID}\n\n{e}")
+            return
+
+        # 결과
+        self.var_result.set(out)
+        self.txt_steps.configure(state="normal")
+        self.txt_steps.delete("1.0", "end")
+        for s in steps:
+            self.txt_steps.insert("end", s + "\n")
+        self.txt_steps.configure(state="disabled")
+
+        # 요약 (2/8/10/16) — 동일 서식 적용
+        try:
+            # 이미 convert 내부에서 Fraction 평가하므로 여기선 expr를 재해석할 필요 없음.
+            # 요약은 현재 결과(10진 Fraction)를 재활용하고 싶지만,
+            # 간단히 base_from 기준으로 재계산 경로 사용.
+            if any(c in expr for c in "+-*/()%^"):
+                dec, _ = evaluate_expression(expr, base_from, precision=precision, round_mode=round_mode)
             else:
-                if len(stack) < 2:
-                    raise ValueError("이항 연산 피연산자 부족")
-                b = stack.pop()
-                a = stack.pop()
-                stack.append(_apply_binary_frac(t, a, b))
-        else:
-            stack.append(_token_to_fraction(t, base_from))
+                dec, _ = evaluate_expression(expr, base_from, precision=precision, round_mode=round_mode)
 
-    if len(stack) != 1:
-        raise ValueError("수식이 올바르지 않습니다.")
-    result = stack[0]
-    steps.append(f"[evaluate] 계산 결과(Fraction): {result.numerator}/{result.denominator}")
-    return result, steps
+            b2, _ = from_decimal(dec, 2, precision, fmt=fmt)
+            b8, _ = from_decimal(dec, 8, precision, fmt=fmt)
+            b10, _ = from_decimal(dec, 10, precision, fmt=fmt)
+            b16, _ = from_decimal(dec, 16, precision, fmt=fmt)
+            for entry, val in ((self.sum2, b2), (self.sum8, b8), (self.sum10, b10), (self.sum16, b16)):
+                entry.configure(state="normal")
+                entry.delete(0, END)
+                entry.insert(0, val)
+                entry.configure(state="readonly")
+        except Exception:
+            pass
 
-# -----------------------------
-# 외부 API: convert
-#  - 연산이 있으면 Fraction 기반 평가 → 순환소수 표기 포함 변환
-#  - 단순 숫자면 기존 경로도 허용 (외부 호환)
-# -----------------------------
-def convert(expr: str, base_from: int, base_to: int, precision=12, round_mode_str="HALF_UP"):
-    set_decimal_context(precision, round_mode_str)
-    expr = sanitize_expr(expr)
+        if add_history:
+            self.hist.add(expr, base_from, base_to, out)
+            self._hist_refresh()
 
-    # 연산 포함 여부
-    if any(op in expr for op in "+-*/()%^"):
-        fr, steps1 = evaluate_expression(expr, base_from, precision, round_mode_str)
-        out, steps2 = from_decimal(fr, base_to, precision)  # Fraction 처리
-        return out, steps1 + steps2
-    else:
-        # 순수 숫자 변환도 Fraction 경로로 정확도↑
-        fr = _token_to_fraction(expr, base_from)
-        steps1 = [f"[to_fraction] {expr} ({base_from}진) → {fr.numerator}/{fr.denominator}"]
-        out, steps2 = from_decimal(fr, base_to, precision)
-        return out, steps1 + steps2
+
+def run():
+    app = App()
+    app.mainloop()
