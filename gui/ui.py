@@ -1,4 +1,3 @@
-# gui/ui.py
 import tkinter as tk
 import customtkinter as ctk
 from tkinter import colorchooser, messagebox, END, Scrollbar, ttk, filedialog, simpledialog
@@ -18,9 +17,11 @@ class App(ctk.CTk):
         self.cfg = load_config()
         self.lang = self.cfg.get("language", "KR")
         self.texts = KR if self.lang == "KR" else EN
+        ctk.set_appearance_mode("system")
+        ctk.set_default_color_theme("blue")
         self.theme = load_theme()
         apply_theme(self.theme)
-        ctk.set_appearance_mode("system")
+
         self.title(self.texts.APP_TITLE)
         self.geometry("1160x820"); self.minsize(980, 640)
         self.hist = HistoryStore(); self._hist_view = []
