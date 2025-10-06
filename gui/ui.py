@@ -1,8 +1,11 @@
+# gui/ui.py
 import tkinter as tk
 import customtkinter as ctk
 from tkinter import colorchooser, messagebox, END, Scrollbar, ttk, filedialog, simpledialog
 from gui import ui_text_kr as KR
 from gui import ui_text_en as EN
+from gui.help_text_kr import HELP_TEXT as HELP_KR, CLI_TEXT as CLI_KR
+from gui.help_text_en import HELP_TEXT as HELP_EN, CLI_TEXT as CLI_EN
 from gui.config_manager import load_config, save_config
 from gui.theme_manager import load_theme, save_theme, apply_theme
 from history.store import HistoryStore
@@ -19,7 +22,7 @@ class App(ctk.CTk):
         apply_theme(self.theme)
         ctk.set_appearance_mode("system")
         self.title(self.texts.APP_TITLE)
-        self.geometry("1120x780"); self.minsize(980, 620)
+        self.geometry("1160x820"); self.minsize(980, 640)
         self.hist = HistoryStore(); self._hist_view = []
         self._build_ui(); self._bind_keys()
         self._hist_refresh()
@@ -28,6 +31,7 @@ class App(ctk.CTk):
         top = ctk.CTkFrame(self); top.pack(fill="x", padx=10, pady=6)
         self.lang_btn = ctk.CTkSegmentedButton(top, values=["KR", "EN"], command=self._on_lang_change)
         self.lang_btn.set(self.lang); self.lang_btn.pack(side="right", padx=(0, 10))
+        ctk.CTkButton(top, text="도움말(F1)", width=110, command=self._open_help).pack(side="right", padx=(0,10))
         ctk.CTkLabel(top, text="정밀도").pack(side="left")
         self.prec_var = tk.IntVar(value=self.cfg.get("precision", 12))
         ctk.CTkEntry(top, textvariable=self.prec_var, width=50).pack(side="left", padx=6)
@@ -81,7 +85,6 @@ class App(ctk.CTk):
         ctk.CTkButton(hctl, text="★ 토글", width=100, command=self.on_toggle_fav).pack(side="left")
         ctk.CTkButton(hctl, text="#태그 추가", width=110, command=self.on_add_tag).pack(side="left", padx=(6,0))
         ctk.CTkButton(hctl, text="CSV 내보내기", width=120, command=self.on_export_csv).pack(side="right", padx=(6,0))
-        ctk.CTkCTkButton = ctk.CTkButton
         ctk.CTkButton(hctl, text="CSV 가져오기", width=120, command=self.on_import_csv).pack(side="right", padx=(6,0))
         ctk.CTkButton(hctl, text="JSON 백업", width=110, command=self.on_export_json).pack(side="right", padx=(6,0))
         ctk.CTkButton(hctl, text="JSON 복원", width=110, command=self.on_import_json).pack(side="right")
@@ -96,6 +99,25 @@ class App(ctk.CTk):
         self.bind("<Escape>", lambda e:self._clear())
         self.bind("<Control-c>", lambda e:self._copy(self.result_var.get()))
         self.bind("<Control-f>", lambda e:self._focus_hist())
+        self.bind("<F1>", lambda e:self._open_help())
+
+    def _open_help(self):
+        lang_help = HELP_KR if self.lang == "KR" else HELP_EN
+        lang_cli = CLI_KR if self.lang == "KR" else CLI_EN
+        txt = lang_help.strip() + "\n\n" + ("="*40) + "\n\n" + lang_cli.strip()
+        win = ctk.CTkToplevel(self)
+        win.title("도움말 / Help")
+        win.geometry("840x640")
+        win.minsize(600, 400)
+        fr = ctk.CTkFrame(win)
+        fr.pack(fill="both", expand=True, padx=10, pady=10)
+        text = ctk.CTkTextbox(fr, wrap="word")
+        text.pack(fill="both", expand=True)
+        text.insert("end", txt)
+        text.configure(state="disabled")
+        btns = ctk.CTkFrame(win)
+        btns.pack(fill="x", padx=10, pady=(0,10))
+        ctk.CTkButton(btns, text="닫기 / Close", command=win.destroy).pack(side="right")
 
     def _focus_hist(self):
         self.tree.focus_set()
@@ -137,7 +159,7 @@ class App(ctk.CTk):
         if not s:
             self.err_msg.configure(text=""); return
         try:
-            tokens = tokenize_mixed(s)
+            tokenize_mixed(s)
         except Exception as e:
             self.err_msg.configure(text=str(e)); return
         self.err_msg.configure(text="")
