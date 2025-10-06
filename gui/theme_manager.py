@@ -1,9 +1,15 @@
-import json
+import json, os
 from pathlib import Path
 import customtkinter as ctk
 
-ASSETS_PATH = Path(__file__).resolve().parent.parent / "assets"
-THEME_PATH = ASSETS_PATH / "theme.json"
+ROOT = Path(__file__).resolve().parents[1]
+PORTABLE = (ROOT / "portable.flag").exists()
+
+ASSETS_PATH = ROOT / "assets"
+if PORTABLE:
+    THEME_PATH = ROOT / "data" / "theme.json"
+else:
+    THEME_PATH = Path(os.getenv("APPDATA", Path.home())) / "BaseConverter" / "theme.json"
 
 DEFAULT_THEME = {
     "CTk": {

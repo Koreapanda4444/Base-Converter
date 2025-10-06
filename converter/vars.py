@@ -3,7 +3,10 @@ import json, os
 from pathlib import Path
 from fractions import Fraction
 
-VAR_PATH = Path(os.getenv("APPDATA", Path.home())) / "BaseConverter" / "vars.json"
+ROOT = Path(__file__).resolve().parents[1]
+PORTABLE = (ROOT / "portable.flag").exists()
+BASE_DIR = ROOT / "data" if PORTABLE else Path(os.getenv("APPDATA", Path.home())) / "BaseConverter"
+VAR_PATH = BASE_DIR / "vars.json"
 
 def _load() -> dict:
     try:

@@ -7,6 +7,7 @@ from gui.config_manager import load_config, save_config
 from gui.theme_manager import load_theme, save_theme, apply_theme
 from history.store import HistoryStore
 from converter.logic import convert
+from converter.utils import tokenize_mixed
 
 class App(ctk.CTk):
     def __init__(self):
@@ -18,7 +19,7 @@ class App(ctk.CTk):
         apply_theme(self.theme)
         ctk.set_appearance_mode("system")
         self.title(self.texts.APP_TITLE)
-        self.geometry("1120x760"); self.minsize(980, 620)
+        self.geometry("1120x780"); self.minsize(980, 620)
         self.hist = HistoryStore(); self._hist_view = []
         self._build_ui(); self._bind_keys()
         self._hist_refresh()
@@ -40,41 +41,47 @@ class App(ctk.CTk):
         ctk.CTkCheckBox(top, text="과학표기", variable=self.sci_var).pack(side="left")
 
         main = ctk.CTkFrame(self); main.pack(fill="both", expand=True, padx=10, pady=(0,10))
-        main.grid_columnconfigure(1, weight=1); main.grid_rowconfigure(4, weight=1)
+        main.grid_columnconfigure(1, weight=1); main.grid_rowconfigure(5, weight=1)
 
         ctk.CTkLabel(main, text=self.texts.LBL_INPUT).grid(row=0, column=0, sticky="w")
         self.input_var = tk.StringVar(value="")
         self.ent_input = ctk.CTkEntry(main, textvariable=self.input_var)
-        self.ent_input.grid(row=0, column=1, sticky="ew", pady=4)
+        self.ent_input.grid(row=0, column=1, sticky="ew", pady=(4,2))
+        self.ent_input.bind("<KeyRelease>", lambda e:self._live_validate())
 
-        bases = ctk.CTkFrame(main); bases.grid(row=1, column=1, sticky="w")
-        ctk.CTkLabel(main, text=self.texts.LBL_FROM).grid(row=1, column=0, sticky="w")
+        self.err_msg = ctk.CTkLabel(main, text="", text_color="#D9534F")
+        self.err_msg.grid(row=1, column=1, sticky="w", pady=(0,6))
+
+        bases = ctk.CTkFrame(main); bases.grid(row=2, column=1, sticky="w")
+        ctk.CTkLabel(main, text=self.texts.LBL_FROM).grid(row=2, column=0, sticky="w")
         self.base_from = tk.StringVar(value="10")
-        ctk.CTkComboBox(bases, values=[str(i) for i in range(2, 37)], variable=self.base_from, width=80).pack(side="left")
+        self.cmb_from = ctk.CTkComboBox(bases, values=[str(i) for i in range(2, 37)], variable=self.base_from, width=80, command=lambda _=None:self._live_validate())
+        self.cmb_from.pack(side="left")
         ctk.CTkLabel(bases, text=self.texts.LBL_TO).pack(side="left", padx=(12,2))
         self.base_to = tk.StringVar(value="2")
         ctk.CTkComboBox(bases, values=[str(i) for i in range(2, 37)], variable=self.base_to, width=80).pack(side="left", padx=(0,4))
 
-        resrow = ctk.CTkFrame(main); resrow.grid(row=2, column=1, sticky="ew", pady=(6,2)); resrow.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(main, text=self.texts.LBL_RESULT).grid(row=2, column=0, sticky="nw")
+        resrow = ctk.CTkFrame(main); resrow.grid(row=3, column=1, sticky="ew", pady=(6,2)); resrow.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(main, text=self.texts.LBL_RESULT).grid(row=3, column=0, sticky="nw")
         self.result_var = tk.StringVar(value="")
         ctk.CTkEntry(resrow, textvariable=self.result_var, state="readonly").grid(row=0, column=0, sticky="ew")
         ctk.CTkButton(resrow, text="복사", width=70, command=lambda:self._copy(self.result_var.get())).grid(row=0, column=1, padx=(6,0))
 
-        ctk.CTkButton(main, text=self.texts.BTN_CONVERT, command=self.on_convert).grid(row=3, column=1, sticky="e", pady=(6,0))
+        ctk.CTkButton(main, text=self.texts.BTN_CONVERT, command=self.on_convert).grid(row=4, column=1, sticky="e", pady=(6,0))
 
         self.tree = ttk.Treeview(main, columns=("expr","bases","result","fav","tags"), show="headings", selectmode="browse")
         for k,t,w,a in [("expr","입력",380,"w"),("bases","진법",90,"center"),("result","결과",280,"w"),("fav","★",40,"center"),("tags","태그",120,"w")]:
             self.tree.heading(k, text=t); self.tree.column(k, width=w, anchor=a)
-        self.tree.grid(row=4, column=0, columnspan=2, sticky="nsew", pady=(6,0))
+        self.tree.grid(row=5, column=0, columnspan=2, sticky="nsew", pady=(6,0))
         self.tree.bind("<Double-1>", self.on_hist_load)
-        sb = Scrollbar(main, command=self.tree.yview); sb.grid(row=4, column=2, sticky="ns")
+        sb = Scrollbar(main, command=self.tree.yview); sb.grid(row=5, column=2, sticky="ns")
         self.tree.configure(yscrollcommand=sb.set)
 
         hctl = ctk.CTkFrame(self); hctl.pack(fill="x", padx=10, pady=(6,8))
         ctk.CTkButton(hctl, text="★ 토글", width=100, command=self.on_toggle_fav).pack(side="left")
         ctk.CTkButton(hctl, text="#태그 추가", width=110, command=self.on_add_tag).pack(side="left", padx=(6,0))
         ctk.CTkButton(hctl, text="CSV 내보내기", width=120, command=self.on_export_csv).pack(side="right", padx=(6,0))
+        ctk.CTkCTkButton = ctk.CTkButton
         ctk.CTkButton(hctl, text="CSV 가져오기", width=120, command=self.on_import_csv).pack(side="right", padx=(6,0))
         ctk.CTkButton(hctl, text="JSON 백업", width=110, command=self.on_export_json).pack(side="right", padx=(6,0))
         ctk.CTkButton(hctl, text="JSON 복원", width=110, command=self.on_import_json).pack(side="right")
@@ -99,7 +106,7 @@ class App(ctk.CTk):
         except Exception: pass
 
     def _clear(self):
-        self.input_var.set(""); self.result_var.set("")
+        self.input_var.set(""); self.result_var.set(""); self.err_msg.configure(text="")
 
     def _on_lang_change(self, v):
         self.lang = v; self.texts = KR if v=="KR" else EN
@@ -125,19 +132,35 @@ class App(ctk.CTk):
             "sig": int(self.sig_var.get() or 0),
         }
 
+    def _live_validate(self):
+        s = self.input_var.get().strip()
+        if not s:
+            self.err_msg.configure(text=""); return
+        try:
+            tokens = tokenize_mixed(s)
+        except Exception as e:
+            self.err_msg.configure(text=str(e)); return
+        self.err_msg.configure(text="")
+
     def on_convert(self):
-        expr = self._normalize(self.input_var.get())
+        expr = self.input_var.get().replace(" ", "")
         if not expr:
-            messagebox.showerror("오류", "입력값이 없습니다."); return
+            self.err_msg.configure(text="입력값이 없습니다."); return
+        self.err_msg.configure(text="")
         try:
             bfrom = int(self.base_from.get()); bto = int(self.base_to.get())
             prec = int(self.prec_var.get()); rmode = self.round_var.get()
+        except Exception:
+            self.err_msg.configure(text="진법/정밀도/반올림 설정을 확인하세요."); return
+        try:
             out, _ = convert(expr, bfrom, bto, precision=prec, round_mode_str=rmode, fmt=self._fmt())
             self.result_var.set(out)
             self.hist.add(expr, bfrom, bto, out)
             self._hist_refresh(); self._save_cfg()
+        except ZeroDivisionError:
+            messagebox.showerror("오류", "0으로 나눌 수 없습니다.")
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            self.err_msg.configure(text=str(e))
 
     def on_hist_load(self, event=None):
         sel = self.tree.selection()
@@ -213,12 +236,6 @@ class App(ctk.CTk):
         mode = "append" if ans else "replace"
         try: self.hist.import_json(p, mode); self._hist_refresh(); messagebox.showinfo("완료", "JSON 반영됨")
         except Exception as e: messagebox.showerror("오류", str(e))
-
-    def _normalize(self, s: str) -> str:
-        if not s: return s
-        t = s.replace(" ", "")
-        t = t.replace("—","-").replace("–","-")
-        return t
 
 def run():
     app = App(); app.mainloop()

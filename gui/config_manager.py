@@ -1,7 +1,14 @@
 import os, json
 from pathlib import Path
 
-CONFIG_DIR = Path(os.getenv("APPDATA", Path.home())) / "BaseConverter"
+ROOT = Path(__file__).resolve().parents[1]
+PORTABLE = (ROOT / "portable.flag").exists()
+
+if PORTABLE:
+    CONFIG_DIR = ROOT / "data"
+else:
+    CONFIG_DIR = Path(os.getenv("APPDATA", Path.home())) / "BaseConverter"
+
 CONFIG_PATH = CONFIG_DIR / "config.json"
 
 DEFAULT_CONFIG = {
