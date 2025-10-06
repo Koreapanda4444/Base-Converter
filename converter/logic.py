@@ -1,4 +1,3 @@
-# gui/ui.py
 import re
 import tkinter as tk
 import customtkinter as ctk
@@ -38,7 +37,7 @@ class App(ctk.CTk):
         self.title(T.APP_TITLE)
         self._init_window_size()
         self.hist = HistoryStore()
-        self._hist_view = []  # 현재 화면에 표시 중 뷰(검색/정렬 반영본)
+        self._hist_view = []
 
         self._build_panes()
         self._style_treeview()
@@ -47,7 +46,6 @@ class App(ctk.CTk):
         self.after(100, self._hist_refresh)
         self.ent_input.bind("<Return>", lambda e: self.on_convert())
 
-    # -----------------------------
     def _init_window_size(self):
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
         gw, gh = int(sw * 0.6), int(sh * 0.65)
@@ -57,7 +55,6 @@ class App(ctk.CTk):
         self.geometry(f"{gw}x{gh}+{x}+{y}")
         self.minsize(MIN_W, MIN_H)
 
-    # -----------------------------
     def _build_panes(self):
         pw = tk.PanedWindow(self, orient="horizontal", sashwidth=8, opaqueresize=True)
         pw.pack(side="top", fill="both", expand=True, padx=12, pady=12)
@@ -69,7 +66,6 @@ class App(ctk.CTk):
         pw.add(self.mid, minsize=320)
         pw.add(self.right, minsize=300)
 
-        # LEFT
         self.left.grid_columnconfigure(0, weight=1)
 
         inp = ctk.CTkFrame(self.left)
@@ -101,37 +97,31 @@ class App(ctk.CTk):
         self.cmb_round = ctk.CTkComboBox(inp, values=ROUND_CHOICES, variable=self.var_round, width=120)
         self.cmb_round.grid(row=3, column=3, sticky="w", padx=(2, 8))
 
-        # ---- 출력 서식 옵션 ----
         fmt_fr = ctk.CTkFrame(self.left)
         fmt_fr.grid(row=4, column=0, sticky="ew", pady=(2, 8))
         fmt_fr.grid_columnconfigure(10, weight=1)
 
         ctk.CTkLabel(fmt_fr, text="서식").grid(row=0, column=0, sticky="w", padx=(0,6))
 
-        # 대/소문자
         ctk.CTkLabel(fmt_fr, text="문자").grid(row=0, column=1, sticky="w")
         self.var_case = tk.StringVar(value=CASE_CHOICES[0])
         self.cmb_case = ctk.CTkComboBox(fmt_fr, values=CASE_CHOICES, variable=self.var_case, width=85)
         self.cmb_case.grid(row=0, column=2, sticky="w", padx=(2, 10))
 
-        # 그룹
         ctk.CTkLabel(fmt_fr, text="그룹").grid(row=0, column=3, sticky="w")
         self.var_group = tk.StringVar(value=GROUP_CHOICES[0])
         self.cmb_group = ctk.CTkComboBox(fmt_fr, values=GROUP_CHOICES, variable=self.var_group, width=85)
         self.cmb_group.grid(row=0, column=4, sticky="w", padx=(2, 10))
 
-        # 구분자
         ctk.CTkLabel(fmt_fr, text="구분자").grid(row=0, column=5, sticky="w")
         self.var_sep = tk.StringVar(value=SEP_CHOICES[0])
         self.cmb_sep = ctk.CTkComboBox(fmt_fr, values=SEP_CHOICES, variable=self.var_sep, width=120)
         self.cmb_sep.grid(row=0, column=6, sticky="w", padx=(2, 10))
 
-        # 접두어
         self.var_prefix = tk.BooleanVar(value=False)
         self.chk_prefix = ctk.CTkCheckBox(fmt_fr, text="접두어(0x/0b/0o)", variable=self.var_prefix)
         self.chk_prefix.grid(row=0, column=7, sticky="w")
 
-        # 버튼들
         self.btn_convert = ctk.CTkButton(inp, text=T.BTN_CONVERT, command=self.on_convert, width=110)
         self.btn_convert.grid(row=3, column=4, padx=(12, 6))
         self.btn_swap = ctk.CTkButton(inp, text=T.BTN_SWAP, command=self.on_swap, width=70)
@@ -139,7 +129,6 @@ class App(ctk.CTk):
         self.btn_clear = ctk.CTkButton(inp, text=T.BTN_CLEAR, command=self.on_clear, width=80)
         self.btn_clear.grid(row=3, column=6, padx=6)
 
-        # 결과 영역
         ctk.CTkLabel(self.left, text=T.LBL_RESULT).grid(row=5, column=0, sticky="w")
         res_row = ctk.CTkFrame(self.left)
         res_row.grid(row=6, column=0, sticky="ew", pady=(2, 6))
@@ -148,16 +137,14 @@ class App(ctk.CTk):
         self.ent_result = ctk.CTkEntry(res_row, textvariable=self.var_result, state="readonly")
         self.ent_result.grid(row=0, column=0, sticky="ew")
         ctk.CTkButton(res_row, text=T.BTN_COPY, width=60,
-                      command=lambda: self._copy_to_clip(self.ent_result.get())).grid(row=0, column=1, padx=(6, 0))
+                    command=lambda: self._copy_to_clip(self.ent_result.get())).grid(row=0, column=1, padx=(6, 0))
 
-        # 요약 영역 (2,8,10,16진)
         ctk.CTkLabel(self.left, text=T.LBL_SUMMARY).grid(row=7, column=0, sticky="w", pady=(6, 2))
         self.sum2 = self._mk_sum_row(self.left, 8, "2진")
         self.sum8 = self._mk_sum_row(self.left, 9, "8진")
         self.sum10 = self._mk_sum_row(self.left, 10, "10진")
         self.sum16 = self._mk_sum_row(self.left, 11, "16진")
 
-        # MID
         self.mid.grid_columnconfigure(0, weight=1)
         self.mid.grid_rowconfigure(1, weight=1)
         self.lbl_steps = ctk.CTkLabel(self.mid, text=T.LBL_STEPS)
@@ -165,7 +152,6 @@ class App(ctk.CTk):
         self.txt_steps = ctk.CTkTextbox(self.mid, wrap="word")
         self.txt_steps.grid(row=1, column=0, sticky="nsew")
 
-        # RIGHT (검색/정렬/컨트롤/테이블) — 이전 그대로
         self.right.grid_columnconfigure(0, weight=1)
         self.right.grid_rowconfigure(3, weight=1)
 
@@ -217,7 +203,6 @@ class App(ctk.CTk):
         self.status = ctk.CTkLabel(self, text="")
         self.status.pack(side="bottom", fill="x", padx=12, pady=(0, 6))
 
-    # -----------------------------
     def _mk_sum_row(self, parent, r, label):
         fr = ctk.CTkFrame(parent)
         fr.grid(row=r, column=0, sticky="ew", pady=2)
@@ -226,7 +211,7 @@ class App(ctk.CTk):
         entry = ctk.CTkEntry(fr, state="readonly")
         entry.grid(row=0, column=1, sticky="ew")
         ctk.CTkButton(fr, text=T.BTN_COPY, width=60,
-                      command=lambda e=entry: self._copy_to_clip(e.get())).grid(row=0, column=2, padx=(6, 0))
+                    command=lambda e=entry: self._copy_to_clip(e.get())).grid(row=0, column=2, padx=(6, 0))
         return entry
 
     def _style_treeview(self):
@@ -268,8 +253,8 @@ class App(ctk.CTk):
             relief="flat"
         )
         style.map("Treeview.Heading",
-                  background=[("active", head_bg)],
-                  foreground=[("active", head_fg)])
+                background=[("active", head_bg)],
+                foreground=[("active", head_fg)])
 
     def _init_hint(self):
         self.txt_steps.configure(state="normal")
@@ -277,7 +262,6 @@ class App(ctk.CTk):
         self.txt_steps.insert("end", T.HINT)
         self.txt_steps.configure(state="disabled")
 
-    # -----------------------------
     def _hist_refresh(self):
         label = self.var_sort.get()
         sort_mode = next((code for text, code in SORT_CHOICES if text == label), "time_desc")
@@ -291,7 +275,6 @@ class App(ctk.CTk):
             bases = f"{item.base_from}→{item.base_to}"
             self.tree.insert("", "end", iid=str(idx), values=(item.expr, bases, item.result))
 
-    # -----------------------------
     def _copy_to_clip(self, text: str):
         if not text:
             return
@@ -317,7 +300,6 @@ class App(ctk.CTk):
         self._init_hint()
         self.status.configure(text="")
 
-    # 더블클릭/Enter: 불러오고 결과 자동복사
     def on_hist_load(self, event=None):
         sel = self.tree.selection()
         if not sel:
@@ -392,13 +374,9 @@ class App(ctk.CTk):
     def on_convert(self):
         self._recompute(add_history=True)
 
-    # -----------------------------
     def _current_format(self):
-        # letter case
         letter_case = "upper" if self.var_case.get() == "UPPER" else "lower"
-        # group size
         group_size = 0 if self.var_group.get() == "없음" else 4
-        # separator
         sep = " " if self.var_sep.get().startswith("공백") else "_"
         use_prefix = bool(self.var_prefix.get())
         return {
@@ -430,19 +408,13 @@ class App(ctk.CTk):
             messagebox.showerror("변환 실패", f"{T.ERR_INVALID}\n\n{e}")
             return
 
-        # 결과
         self.var_result.set(out)
         self.txt_steps.configure(state="normal")
         self.txt_steps.delete("1.0", "end")
         for s in steps:
             self.txt_steps.insert("end", s + "\n")
         self.txt_steps.configure(state="disabled")
-
-        # 요약 (2/8/10/16) — 동일 서식 적용
         try:
-            # 이미 convert 내부에서 Fraction 평가하므로 여기선 expr를 재해석할 필요 없음.
-            # 요약은 현재 결과(10진 Fraction)를 재활용하고 싶지만,
-            # 간단히 base_from 기준으로 재계산 경로 사용.
             if any(c in expr for c in "+-*/()%^"):
                 dec, _ = evaluate_expression(expr, base_from, precision=precision, round_mode=round_mode)
             else:

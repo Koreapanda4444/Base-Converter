@@ -1,12 +1,13 @@
 import tkinter as tk
 import customtkinter as ctk
-from tkinter import messagebox, END, Scrollbar, ttk
+from tkinter import colorchooser, messagebox, END, Scrollbar, ttk
 
 from gui import ui_text_kr as KR
 from gui import ui_text_en as EN
 from gui.config_manager import load_config, save_config
+from gui.theme_manager import load_theme, save_theme, apply_theme
 from history.store import HistoryStore
-from converter.logic import convert, evaluate_expression, to_decimal, from_decimal
+from converter.logic import convert
 
 
 class App(ctk.CTk):
@@ -16,11 +17,13 @@ class App(ctk.CTk):
         self.lang = self.config_data.get("language", "KR")
         self.texts = KR if self.lang == "KR" else EN
 
-        ctk.set_appearance_mode(self.config_data.get("theme", "system"))
-        ctk.set_default_color_theme("blue")
+        self.theme = load_theme()
+        apply_theme(self.theme)
+
+        ctk.set_appearance_mode("system")
 
         self.title(self.texts.APP_TITLE)
-        self.geometry("1000x600")
+        self.geometry("1000x650")
         self.minsize(900, 560)
 
         self.hist = HistoryStore()
@@ -46,41 +49,58 @@ class App(ctk.CTk):
         ctk.CTkComboBox(topbar, values=["HALF_UP", "HALF_DOWN", "HALF_EVEN", "CEILING", "FLOOR"],
                         variable=self.round_var, width=120).pack(side="left", padx=6)
 
-        frame = ctk.CTkFrame(self)
-        frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
-        frame.grid_columnconfigure(1, weight=1)
-        frame.grid_rowconfigure(2, weight=1)
+        main_frame = ctk.CTkFrame(self)
+        main_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        main_frame.grid_columnconfigure(1, weight=1)
+        main_frame.grid_rowconfigure(3, weight=1)
 
-        ctk.CTkLabel(frame, text=self.texts.LBL_INPUT).grid(row=0, column=0, sticky="w")
+        ctk.CTkLabel(main_frame, text=self.texts.LBL_INPUT).grid(row=0, column=0, sticky="w")
         self.input_var = tk.StringVar(value="")
-        self.ent_input = ctk.CTkEntry(frame, textvariable=self.input_var, placeholder_text="예: 1011 + A.F")
-        self.ent_input.grid(row=0, column=1, sticky="ew", pady=4)
+        ctk.CTkEntry(main_frame, textvariable=self.input_var).grid(row=0, column=1, sticky="ew", pady=4)
 
-        ctk.CTkLabel(frame, text=self.texts.LBL_FROM).grid(row=1, column=0, sticky="w")
+        ctk.CTkLabel(main_frame, text=self.texts.LBL_FROM).grid(row=1, column=0, sticky="w")
         self.base_from = tk.StringVar(value="10")
-        self.cmb_from = ctk.CTkComboBox(frame, values=[str(i) for i in range(2, 37)], variable=self.base_from, width=80)
-        self.cmb_from.grid(row=1, column=1, sticky="w")
+        ctk.CTkComboBox(main_frame, values=[str(i) for i in range(2, 37)], variable=self.base_from, width=80).grid(row=1, column=1, sticky="w")
 
-        ctk.CTkLabel(frame, text=self.texts.LBL_TO).grid(row=1, column=1, sticky="e", padx=(0, 120))
+        ctk.CTkLabel(main_frame, text=self.texts.LBL_TO).grid(row=1, column=1, sticky="e", padx=(0, 120))
         self.base_to = tk.StringVar(value="2")
-        self.cmb_to = ctk.CTkComboBox(frame, values=[str(i) for i in range(2, 37)], variable=self.base_to, width=80)
-        self.cmb_to.place(relx=0.9, rely=0.22)
+        ctk.CTkComboBox(main_frame, values=[str(i) for i in range(2, 37)], variable=self.base_to, width=80).place(relx=0.9, rely=0.22)
 
-        ctk.CTkLabel(frame, text=self.texts.LBL_RESULT).grid(row=2, column=0, sticky="nw")
+        ctk.CTkLabel(main_frame, text=self.texts.LBL_RESULT).grid(row=2, column=0, sticky="nw")
         self.result_var = tk.StringVar(value="")
-        self.ent_result = ctk.CTkEntry(frame, textvariable=self.result_var, state="readonly")
-        self.ent_result.grid(row=2, column=1, sticky="ew", pady=(0, 6))
+        ctk.CTkEntry(main_frame, textvariable=self.result_var, state="readonly").grid(row=2, column=1, sticky="ew", pady=(0, 6))
 
-        ctk.CTkButton(frame, text=self.texts.BTN_CONVERT, command=self.on_convert).grid(row=3, column=1, sticky="e", pady=(6, 0))
+        ctk.CTkButton(main_frame, text=self.texts.BTN_CONVERT, command=self.on_convert).grid(row=3, column=1, sticky="e", pady=(6, 0))
 
-        self.tree = ttk.Treeview(frame, columns=("expr", "result"), show="headings")
+        self.tree = ttk.Treeview(main_frame, columns=("expr", "result"), show="headings")
         self.tree.heading("expr", text="입력")
         self.tree.heading("result", text="결과")
         self.tree.grid(row=4, column=0, columnspan=2, sticky="nsew")
         self.tree.bind("<Double-1>", self.on_hist_load)
-        sb = Scrollbar(frame, command=self.tree.yview)
+        sb = Scrollbar(main_frame, command=self.tree.yview)
         sb.grid(row=4, column=2, sticky="ns")
         self.tree.configure(yscrollcommand=sb.set)
+
+        theme_frame = ctk.CTkFrame(self)
+        theme_frame.pack(fill="x", padx=10, pady=(4, 10))
+
+        ctk.CTkLabel(theme_frame, text="🎨 Theme Settings").pack(anchor="w", padx=8, pady=(4, 6))
+
+        self.btn_fg = ctk.CTkButton(theme_frame, text="글자색 변경", command=lambda: self._pick_color("text_color"))
+        self.btn_bg = ctk.CTkButton(theme_frame, text="배경색 변경", command=lambda: self._pick_color("fg_color"))
+        self.btn_main = ctk.CTkButton(theme_frame, text="메인 버튼 색상", command=lambda: self._pick_color("button_color"))
+        self.btn_hover = ctk.CTkButton(theme_frame, text="호버 색상", command=lambda: self._pick_color("button_hover_color"))
+
+        for btn in (self.btn_fg, self.btn_bg, self.btn_main, self.btn_hover):
+            btn.pack(side="left", padx=6, pady=4)
+
+    def _pick_color(self, key):
+        color = colorchooser.askcolor(title="색상 선택")[1]
+        if not color:
+            return
+        self.theme["CTk"][key] = [color, color]
+        apply_theme(self.theme)
+        save_theme(self.theme)
 
     def on_convert(self):
         expr = self.input_var.get().strip()
@@ -120,7 +140,6 @@ class App(ctk.CTk):
             self.tree.insert("", "end", iid=str(idx), values=(item.expr, item.result))
 
     def _on_lang_change(self, value):
-        """언어 토글 시 텍스트 전환"""
         self.lang = value
         self.texts = KR if value == "KR" else EN
         self.title(self.texts.APP_TITLE)
