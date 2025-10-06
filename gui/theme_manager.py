@@ -1,4 +1,4 @@
-import os, json
+import json
 from pathlib import Path
 import customtkinter as ctk
 
@@ -14,26 +14,19 @@ DEFAULT_THEME = {
     }
 }
 
-
 def load_theme():
     if THEME_PATH.exists():
         try:
-            with open(THEME_PATH, "r", encoding="utf-8") as f:
-                return json.load(f)
+            return json.loads(THEME_PATH.read_text(encoding="utf-8"))
         except Exception:
             return DEFAULT_THEME.copy()
     return DEFAULT_THEME.copy()
 
-
 def save_theme(data: dict):
     THEME_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(THEME_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-
+    THEME_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 def apply_theme(theme: dict):
-    """customtkinter에 테마 적용"""
     temp_path = ASSETS_PATH / "_temp_theme.json"
-    with open(temp_path, "w", encoding="utf-8") as f:
-        json.dump(theme, f, indent=2)
+    temp_path.write_text(json.dumps(theme, indent=2, ensure_ascii=False), encoding="utf-8")
     ctk.set_default_color_theme(str(temp_path))
