@@ -27,3 +27,11 @@ def apply_theme(theme: dict | None):
             ctk.set_default_color_theme("blue")
     except Exception:
         ctk.set_default_color_theme("blue")
+
+def save_theme(theme: dict):
+    try:
+        THEME_PATH.parent.mkdir(parents=True, exist_ok=True)
+        THEME_PATH.write_text(json.dumps(theme, indent=2, ensure_ascii=False), encoding="utf-8")
+        return True
+    except Exception:
+        return False

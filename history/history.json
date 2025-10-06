@@ -1,0 +1,20 @@
+[
+  {
+    "expr": "12121",
+    "base_from": 10,
+    "base_to": 2,
+    "result": "10111101011001",
+    "timestamp": "2025-10-06 20:21:19",
+    "favorite": false,
+    "tags": ""
+  },
+  {
+    "expr": "12121",
+    "base_from": 10,
+    "base_to": 2,
+    "result": "10111101011001",
+    "timestamp": "2025-10-06 20:21:18",
+    "favorite": false,
+    "tags": ""
+  }
+]
