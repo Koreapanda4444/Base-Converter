@@ -1,4 +1,3 @@
-# gui/ui_text_en.py
 APP_TITLE = "Base Converter (EN)"
 LBL_INPUT = "Input"
 LBL_FROM = "From Base"

@@ -1,4 +1,3 @@
-# gui/ui_text_kr.py
 APP_TITLE = "Base Converter (KR)"
 LBL_INPUT = "입력"
 LBL_FROM = "입력진법"

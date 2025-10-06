@@ -1,4 +1,3 @@
-# gui/ui.py
 import tkinter as tk
 import customtkinter as ctk
 from tkinter import messagebox, END, Scrollbar, ttk
@@ -13,7 +12,6 @@ from converter.logic import convert, evaluate_expression, to_decimal, from_decim
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        # 설정 불러오기
         self.config_data = load_config()
         self.lang = self.config_data.get("language", "KR")
         self.texts = KR if self.lang == "KR" else EN
@@ -31,30 +29,23 @@ class App(ctk.CTk):
         self._build_ui()
         self._hist_refresh()
 
-    # -----------------------------
-    # UI 빌드
-    # -----------------------------
     def _build_ui(self):
         topbar = ctk.CTkFrame(self)
         topbar.pack(fill="x", padx=10, pady=6)
 
-        # 언어 토글
         self.lang_btn = ctk.CTkSegmentedButton(topbar, values=["KR", "EN"], command=self._on_lang_change)
         self.lang_btn.set(self.lang)
         self.lang_btn.pack(side="right", padx=(0, 10))
 
-        # 정밀도 설정
         ctk.CTkLabel(topbar, text="정밀도").pack(side="left")
         self.prec_var = tk.IntVar(value=self.config_data.get("precision", 12))
         ctk.CTkEntry(topbar, textvariable=self.prec_var, width=50).pack(side="left", padx=6)
 
-        # 반올림 모드
         ctk.CTkLabel(topbar, text="반올림").pack(side="left")
         self.round_var = tk.StringVar(value=self.config_data.get("round_mode", "HALF_UP"))
         ctk.CTkComboBox(topbar, values=["HALF_UP", "HALF_DOWN", "HALF_EVEN", "CEILING", "FLOOR"],
                         variable=self.round_var, width=120).pack(side="left", padx=6)
 
-        # 변환 입력부
         frame = ctk.CTkFrame(self)
         frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         frame.grid_columnconfigure(1, weight=1)
@@ -65,7 +56,6 @@ class App(ctk.CTk):
         self.ent_input = ctk.CTkEntry(frame, textvariable=self.input_var, placeholder_text="예: 1011 + A.F")
         self.ent_input.grid(row=0, column=1, sticky="ew", pady=4)
 
-        # 진법 선택
         ctk.CTkLabel(frame, text=self.texts.LBL_FROM).grid(row=1, column=0, sticky="w")
         self.base_from = tk.StringVar(value="10")
         self.cmb_from = ctk.CTkComboBox(frame, values=[str(i) for i in range(2, 37)], variable=self.base_from, width=80)
@@ -76,7 +66,6 @@ class App(ctk.CTk):
         self.cmb_to = ctk.CTkComboBox(frame, values=[str(i) for i in range(2, 37)], variable=self.base_to, width=80)
         self.cmb_to.place(relx=0.9, rely=0.22)
 
-        # 결과
         ctk.CTkLabel(frame, text=self.texts.LBL_RESULT).grid(row=2, column=0, sticky="nw")
         self.result_var = tk.StringVar(value="")
         self.ent_result = ctk.CTkEntry(frame, textvariable=self.result_var, state="readonly")
@@ -84,7 +73,6 @@ class App(ctk.CTk):
 
         ctk.CTkButton(frame, text=self.texts.BTN_CONVERT, command=self.on_convert).grid(row=3, column=1, sticky="e", pady=(6, 0))
 
-        # 히스토리
         self.tree = ttk.Treeview(frame, columns=("expr", "result"), show="headings")
         self.tree.heading("expr", text="입력")
         self.tree.heading("result", text="결과")
@@ -94,9 +82,6 @@ class App(ctk.CTk):
         sb.grid(row=4, column=2, sticky="ns")
         self.tree.configure(yscrollcommand=sb.set)
 
-    # -----------------------------
-    # 이벤트
-    # -----------------------------
     def on_convert(self):
         expr = self.input_var.get().strip()
         if not expr:

@@ -1,4 +1,3 @@
-# gui/config_manager.py
 import os, json
 from pathlib import Path
 
