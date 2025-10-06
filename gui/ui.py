@@ -17,6 +17,7 @@ class App(ctk.CTk):
         self.cfg = load_config()
         self.lang = self.cfg.get("language", "KR")
         self.texts = KR if self.lang == "KR" else EN
+
         ctk.set_appearance_mode("system")
         ctk.set_default_color_theme("blue")
         self.theme = load_theme()
