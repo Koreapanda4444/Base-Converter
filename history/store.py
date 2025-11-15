@@ -13,7 +13,6 @@ class HistoryItem:
     base_to: int
     result: str
     timestamp: str
-    favorite: bool = False
 
 class HistoryStore:
     def __init__(self):
@@ -32,11 +31,6 @@ class HistoryStore:
         if len(self.items) > MAX_ITEMS:
             self.items = self.items[:MAX_ITEMS]
         self._save()
-
-    def toggle_favorite(self, idx: int):
-        if 0 <= idx < len(self.items):
-            self.items[idx].favorite = not self.items[idx].favorite
-            self._save()
 
     def remove_item(self, item: HistoryItem):
         self.items = [
@@ -68,7 +62,14 @@ class HistoryStore:
         try:
             with open(HISTORY_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            self.items = [HistoryItem(**d) for d in data if isinstance(d, dict)]
+            # favorite 제거 후 남은 데이터만 읽기
+            clean = []
+            for d in data:
+                if not isinstance(d, dict):
+                    continue
+                d.pop("favorite", None)   # 혹시 옛 데이터에 남아있을 경우 제거
+                clean.append(HistoryItem(**d))
+            self.items = clean
         except Exception:
             self.items = []
 
@@ -77,10 +78,7 @@ class HistoryStore:
         data = self.items
 
         if q:
-            if q in {"fav", "star"}:
-                data = [i for i in data if i.favorite]
-            else:
-                data = [i for i in data if q in i.expr.lower() or q in i.result.lower()]
+            data = [i for i in data if q in i.expr.lower() or q in i.result.lower()]
 
         reverse = "desc" in sort_mode
 
@@ -92,8 +90,6 @@ class HistoryStore:
             key = lambda x: x.base_from
         elif "bto" in sort_mode:
             key = lambda x: x.base_to
-        elif "fav" in sort_mode:
-            key = lambda x: (not x.favorite, x.timestamp)
         else:
             key = lambda x: x.result.lower()
 
@@ -103,11 +99,10 @@ class HistoryStore:
         rows = list(rows) if rows is not None else self.items
         with open(path, "w", newline="", encoding="utf-8-sig") as f:
             w = csv.writer(f)
-            w.writerow(["timestamp", "expr", "base_from", "base_to", "result", "favorite"])
+            w.writerow(["timestamp", "expr", "base_from", "base_to", "result"])
             for it in rows:
                 w.writerow([
-                    it.timestamp, it.expr, it.base_from, it.base_to,
-                    it.result, int(it.favorite)
+                    it.timestamp, it.expr, it.base_from, it.base_to, it.result
                 ])
 
     def import_csv(self, path: str, mode: str = "append"):
@@ -119,7 +114,7 @@ class HistoryStore:
             return
 
         header = [c.lower() for c in rows[0]]
-        has_header = set(("timestamp", "expr", "base_from", "base_to", "result")).issubset(header)
+        has_header = set(("timestamp","expr","base_from","base_to","result")).issubset(header)
         start = 1 if has_header else 0
 
         for row in rows[start:]:
@@ -129,12 +124,11 @@ class HistoryStore:
                 if has_header:
                     m = {header[i]: row[i] for i in range(min(len(header), len(row)))}
                     it = HistoryItem(
-                        timestamp=m.get("timestamp", ""),
-                        expr=m.get("expr", ""),
-                        base_from=int(m.get("base_from", "10")),
-                        base_to=int(m.get("base_to", "10")),
-                        result=m.get("result", ""),
-                        favorite=bool(int(m.get("favorite", "0"))) if "favorite" in m else False,
+                        timestamp=m.get("timestamp",""),
+                        expr=m.get("expr",""),
+                        base_from=int(m.get("base_from","10")),
+                        base_to=int(m.get("base_to","10")),
+                        result=m.get("result",""),
                     )
                 else:
                     it = HistoryItem(
@@ -143,7 +137,6 @@ class HistoryStore:
                         base_from=int(row[2]),
                         base_to=int(row[3]),
                         result=row[4],
-                        favorite=bool(int(row[5])) if len(row) > 5 else False,
                     )
                 imported.append(it)
             except Exception:
@@ -165,14 +158,19 @@ class HistoryStore:
     def import_json(self, path: str, mode: str = "append"):
         try:
             data = json.loads(open(path, "r", encoding="utf-8").read())
-            imported = [HistoryItem(**d) for d in data]
+            clean = []
+            for d in data:
+                if not isinstance(d, dict):
+                    continue
+                d.pop("favorite", None)
+                clean.append(HistoryItem(**d))
         except Exception:
             return
 
         if mode == "replace":
-            self.items = imported[:MAX_ITEMS]
+            self.items = clean[:MAX_ITEMS]
         else:
-            self.items = imported + self.items
+            self.items = clean + self.items
             self.items = self.items[:MAX_ITEMS]
 
         self._save()
