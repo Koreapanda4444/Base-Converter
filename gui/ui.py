@@ -21,10 +21,6 @@ SORT_CHOICES = [
     ("입력 Z→A", "expr_desc"),
     ("결과 A→Z", "result_asc"),
     ("결과 Z→A", "result_desc"),
-    ("입력진법 ↑", "bfrom_asc"),
-    ("입력진법 ↓", "bfrom_desc"),
-    ("출력진법 ↑", "bto_asc"),
-    ("출력진법 ↓", "bto_desc"),
 ]
 
 class App(ctk.CTk):

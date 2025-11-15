@@ -62,13 +62,12 @@ class HistoryStore:
         try:
             with open(HISTORY_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            # favorite 제거 후 남은 데이터만 읽기
             clean = []
             for d in data:
-                if not isinstance(d, dict):
-                    continue
-                d.pop("favorite", None)   # 혹시 옛 데이터에 남아있을 경우 제거
-                clean.append(HistoryItem(**d))
+                if isinstance(d, dict):
+                    d.pop("favorite", None)
+                    d.pop("tags", None)
+                    clean.append(HistoryItem(**d))
             self.items = clean
         except Exception:
             self.items = []
@@ -86,10 +85,6 @@ class HistoryStore:
             key = lambda x: x.timestamp
         elif "expr" in sort_mode:
             key = lambda x: x.expr.lower()
-        elif "bfrom" in sort_mode:
-            key = lambda x: x.base_from
-        elif "bto" in sort_mode:
-            key = lambda x: x.base_to
         else:
             key = lambda x: x.result.lower()
 
@@ -101,9 +96,7 @@ class HistoryStore:
             w = csv.writer(f)
             w.writerow(["timestamp", "expr", "base_from", "base_to", "result"])
             for it in rows:
-                w.writerow([
-                    it.timestamp, it.expr, it.base_from, it.base_to, it.result
-                ])
+                w.writerow([it.timestamp, it.expr, it.base_from, it.base_to, it.result])
 
     def import_csv(self, path: str, mode: str = "append"):
         imported: List[HistoryItem] = []
@@ -114,7 +107,7 @@ class HistoryStore:
             return
 
         header = [c.lower() for c in rows[0]]
-        has_header = set(("timestamp","expr","base_from","base_to","result")).issubset(header)
+        has_header = set(("timestamp", "expr", "base_from", "base_to", "result")).issubset(header)
         start = 1 if has_header else 0
 
         for row in rows[start:]:
@@ -124,11 +117,11 @@ class HistoryStore:
                 if has_header:
                     m = {header[i]: row[i] for i in range(min(len(header), len(row)))}
                     it = HistoryItem(
-                        timestamp=m.get("timestamp",""),
-                        expr=m.get("expr",""),
-                        base_from=int(m.get("base_from","10")),
-                        base_to=int(m.get("base_to","10")),
-                        result=m.get("result",""),
+                        timestamp=m.get("timestamp", ""),
+                        expr=m.get("expr", ""),
+                        base_from=int(m.get("base_from", "10")),
+                        base_to=int(m.get("base_to", "10")),
+                        result=m.get("result", ""),
                     )
                 else:
                     it = HistoryItem(
@@ -157,13 +150,14 @@ class HistoryStore:
 
     def import_json(self, path: str, mode: str = "append"):
         try:
-            data = json.loads(open(path, "r", encoding="utf-8").read())
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
             clean = []
             for d in data:
-                if not isinstance(d, dict):
-                    continue
-                d.pop("favorite", None)
-                clean.append(HistoryItem(**d))
+                if isinstance(d, dict):
+                    d.pop("favorite", None)
+                    d.pop("tags", None)
+                    clean.append(HistoryItem(**d))
         except Exception:
             return
 
