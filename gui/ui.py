@@ -119,22 +119,28 @@ class App(ctk.CTk):
         self.tree.bind("<Double-1>", self.on_hist_load)
 
     def _style_treeview(self):
-        fg = "#DCE4EE"
-        bg = "#2B2B2B"
+        is_dark = ctk.get_appearance_mode().lower() == "dark"
+        
+        fg_color = "#DCE4EE" if is_dark else "#333333"
+        bg_color = "#2B2B2B" if is_dark else "#FFFFFF"
+        header_bg = "#212121" if is_dark else "#F0F0F0"
+        selected_bg = "#2C5F8C" if is_dark else "#3399FF"
+        header_active_bg = "#313131" if is_dark else "#E0E0E0"
+
         style = ttk.Style()
         style.theme_use("default")
         style.configure("Treeview",
-                        background=bg,
-                        foreground=fg,
-                        fieldbackground=bg,
+                        background=bg_color,
+                        foreground=fg_color,
+                        fieldbackground=bg_color,
                         borderwidth=0,
                         rowheight=24)
-        style.map("Treeview", background=[("selected", "#2C5F8C")])
+        style.map("Treeview", background=[("selected", selected_bg)])
         style.configure("Treeview.Heading",
-                        background="#212121",
-                        foreground=fg,
+                        background=header_bg,
+                        foreground=fg_color,
                         relief="flat")
-        style.map("Treeview.Heading", background=[("active", "#313131")])
+        style.map("Treeview.Heading", background=[("active", header_active_bg)])
 
     def _init_hint(self):
         self.txt_steps.configure(state="normal")
@@ -212,9 +218,15 @@ class App(ctk.CTk):
         save_config(self.cfg)
 
         try:
-            out, steps = convert(expr, bfrom, bto, precision=prec, round_mode_str=rmode)
+            out, steps = convert(
+                expr=expr, 
+                base_from=bfrom, 
+                base_to=bto, 
+                precision=prec, 
+                round_mode_str=rmode
+            )
         except Exception as e:
-            messagebox.showerror("오류", str(e))
+            messagebox.showerror("변환 오류", str(e))
             return
 
         self.txt_steps.configure(state="normal")
