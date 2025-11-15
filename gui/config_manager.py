@@ -12,7 +12,6 @@ else:
 CONFIG_PATH = CONFIG_DIR / "config.json"
 
 DEFAULT_CONFIG = {
-    "theme": "system",
     "precision": 12,
     "round_mode": "HALF_UP",
     "sig": 0,

@@ -1,33 +1,23 @@
 import tkinter as tk
 import customtkinter as ctk
-from tkinter import ttk, messagebox, END, filedialog
-import json
-import os
+from tkinter import ttk, messagebox
 
-from gui.ui_text_kr import T
-from gui.help_text_kr import HELP_TEXT
-from gui.theme_manager import apply_theme, set_theme
-from converter.logic import convert, to_decimal, from_decimal, evaluate_expression
+from converter.logic import convert
 from history.store import HistoryStore
+from gui.config_manager import load_config, save_config
 
 MIN_W, MIN_H = 900, 560
 
 ROUND_CHOICES = ["HALF_UP", "HALF_DOWN", "HALF_EVEN", "CEILING", "FLOOR"]
-
-SORT_CHOICES = [
-    ("최신순", "time_desc"),
-    ("오래된순", "time_asc"),
-    ("입력 A→Z", "expr_asc"),
-    ("입력 Z→A", "expr_desc"),
-    ("결과 A→Z", "result_asc"),
-    ("결과 Z→A", "result_desc"),
-]
+BASES = [str(i) for i in range(2, 37)]
 
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        apply_theme()
-        self.title(T.APP_TITLE)
+
+        self.cfg = load_config()
+
+        self.title("Base Converter")
         self._init_window_size()
 
         self.hist = HistoryStore()
@@ -36,63 +26,59 @@ class App(ctk.CTk):
         self._build_ui()
         self._style_treeview()
         self._init_hint()
-
-        self.after(100, self._hist_refresh)
+        self.after(50, self._hist_refresh)
 
     def _init_window_size(self):
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
         gw, gh = int(sw * 0.6), int(sh * 0.65)
         gw = max(MIN_W, gw)
         gh = max(MIN_H, gh)
-        x, y = (sw - gw) // 2, (sh - gh) // 2
+        x, y = (sw - gw)//2, (sh - gh)//2
         self.geometry(f"{gw}x{gh}+{x}+{y}")
         self.minsize(MIN_W, MIN_H)
 
     def _build_ui(self):
         top = ctk.CTkFrame(self)
-        top.pack(fill="x", padx=10, pady=6)
+        top.pack(fill="x", padx=10, pady=8)
 
         self.var_input = tk.StringVar()
-        ctk.CTkLabel(top, text=T.LBL_INPUT).pack(anchor="w")
+        ctk.CTkLabel(top, text="입력").pack(anchor="w")
         self.ent_input = ctk.CTkEntry(top, textvariable=self.var_input)
-        self.ent_input.pack(fill="x", pady=4)
+        self.ent_input.pack(fill="x")
 
         opt = ctk.CTkFrame(top)
-        opt.pack(fill="x", pady=4)
+        opt.pack(fill="x", pady=6)
 
-        ctk.CTkLabel(opt, text=T.LBL_FROM).grid(row=0, column=0, sticky="w")
+        ctk.CTkLabel(opt, text="입력진법").grid(row=0, column=0)
         self.var_from = tk.StringVar(value="10")
-        self.cmb_from = ctk.CTkComboBox(opt, values=T.BASES, variable=self.var_from, width=80)
-        self.cmb_from.grid(row=1, column=0, padx=2)
+        ctk.CTkComboBox(opt, values=BASES, variable=self.var_from, width=82).grid(row=1, column=0)
 
-        ctk.CTkLabel(opt, text=T.LBL_TO).grid(row=0, column=1)
+        ctk.CTkLabel(opt, text="출력진법").grid(row=0, column=1, padx=6)
         self.var_to = tk.StringVar(value="2")
-        self.cmb_to = ctk.CTkComboBox(opt, values=T.BASES, variable=self.var_to, width=80)
-        self.cmb_to.grid(row=1, column=1, padx=2)
+        ctk.CTkComboBox(opt, values=BASES, variable=self.var_to, width=82).grid(row=1, column=1, padx=6)
 
         ctk.CTkLabel(opt, text="정밀도").grid(row=0, column=2)
-        self.var_prec = tk.IntVar(value=12)
-        ctk.CTkEntry(opt, textvariable=self.var_prec, width=60).grid(row=1, column=2, padx=4)
+        self.var_prec = tk.IntVar(value=self.cfg.get("precision", 12))
+        ctk.CTkEntry(opt, textvariable=self.var_prec, width=70).grid(row=1, column=2, padx=6)
 
         ctk.CTkLabel(opt, text="반올림").grid(row=0, column=3)
-        self.var_round = tk.StringVar(value="HALF_UP")
-        ctk.CTkComboBox(opt, values=ROUND_CHOICES, variable=self.var_round, width=120).grid(row=1, column=3, padx=4)
+        self.var_round = tk.StringVar(value=self.cfg.get("round_mode", "HALF_UP"))
+        ctk.CTkComboBox(opt, values=ROUND_CHOICES, variable=self.var_round, width=120).grid(row=1, column=3, padx=6)
 
-        ctk.CTkButton(opt, text=T.BTN_CONVERT, command=self.on_convert).grid(row=1, column=4, padx=6)
-        ctk.CTkButton(opt, text=T.BTN_CLEAR, command=self.on_clear).grid(row=1, column=5, padx=6)
-        ctk.CTkButton(opt, text=T.BTN_HELP, command=self.on_help).grid(row=1, column=6, padx=6)
+        ctk.CTkButton(opt, text="변환", command=self.on_convert).grid(row=1, column=4, padx=(14,6))
+        ctk.CTkButton(opt, text="초기화", command=self.on_clear).grid(row=1, column=5, padx=6)
 
         mid = ctk.CTkFrame(self)
         mid.pack(fill="both", expand=True, padx=10, pady=6)
         mid.grid_columnconfigure(1, weight=1)
         mid.grid_rowconfigure(1, weight=1)
 
-        ctk.CTkLabel(mid, text=T.LBL_STEPS).grid(row=0, column=1, sticky="w")
+        ctk.CTkLabel(mid, text="변환 과정").grid(row=0, column=1, sticky="w")
         self.txt_steps = ctk.CTkTextbox(mid)
-        self.txt_steps.grid(row=1, column=1, sticky="nsew", padx=6)
+        self.txt_steps.grid(row=1, column=1, sticky="nsew")
 
         right = ctk.CTkFrame(self)
-        right.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        right.pack(fill="both", expand=True, padx=10, pady=(0,10))
         right.grid_columnconfigure(0, weight=1)
         right.grid_rowconfigure(1, weight=1)
 
@@ -101,35 +87,31 @@ class App(ctk.CTk):
 
         ctk.CTkLabel(head, text="검색").pack(side="left")
         self.var_search = tk.StringVar()
-        ent_search = ctk.CTkEntry(head, textvariable=self.var_search, width=150)
-        ent_search.pack(side="left", padx=4)
-        ent_search.bind("<KeyRelease>", lambda e: self._hist_refresh())
+        e = ctk.CTkEntry(head, textvariable=self.var_search, width=150)
+        e.pack(side="left", padx=4)
+        e.bind("<KeyRelease>", lambda _: self._hist_refresh())
 
-        ctk.CTkLabel(head, text="정렬").pack(side="left", padx=(10, 4))
+        ctk.CTkLabel(head, text="정렬").pack(side="left", padx=(12,4))
         self.var_sort = tk.StringVar(value="최신순")
-        cmb_sort = ctk.CTkComboBox(head, values=[x[0] for x in SORT_CHOICES],
-                                   variable=self.var_sort, width=120)
-        cmb_sort.pack(side="left")
-        cmb_sort.bind("<<ComboboxSelected>>", lambda e: self._hist_refresh())
+        cmb = ctk.CTkComboBox(head, values=["최신순","오래된순","입력 A→Z","입력 Z→A"], variable=self.var_sort, width=120)
+        cmb.pack(side="left")
+        cmb.bind("<<ComboboxSelected>>", lambda _: self._hist_refresh())
 
         wrap = ctk.CTkFrame(right)
         wrap.grid(row=1, column=0, sticky="nsew")
         wrap.grid_columnconfigure(0, weight=1)
         wrap.grid_rowconfigure(0, weight=1)
 
-        self.tree = ttk.Treeview(
-            wrap,
-            columns=("expr", "bases", "result"),
-            show="headings"
-        )
+        self.tree = ttk.Treeview(wrap, columns=("expr","bases","result"), show="headings")
         self.tree.heading("expr", text="입력")
         self.tree.heading("bases", text="진법")
         self.tree.heading("result", text="결과")
+
         self.tree.column("expr", width=190)
         self.tree.column("bases", width=70, anchor="center")
         self.tree.column("result", width=150)
-        self.tree.grid(row=0, column=0, sticky="nsew")
 
+        self.tree.grid(row=0, column=0, sticky="nsew")
         sb = ttk.Scrollbar(wrap, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=sb.set)
         sb.grid(row=0, column=1, sticky="ns")
@@ -137,37 +119,49 @@ class App(ctk.CTk):
         self.tree.bind("<Double-1>", self.on_hist_load)
 
     def _style_treeview(self):
+        fg = "#DCE4EE"
+        bg = "#2B2B2B"
         style = ttk.Style()
         style.theme_use("default")
-        style.configure("Treeview", rowheight=24)
+        style.configure("Treeview",
+                        background=bg,
+                        foreground=fg,
+                        fieldbackground=bg,
+                        borderwidth=0,
+                        rowheight=24)
+        style.map("Treeview", background=[("selected", "#2C5F8C")])
+        style.configure("Treeview.Heading",
+                        background="#212121",
+                        foreground=fg,
+                        relief="flat")
+        style.map("Treeview.Heading", background=[("active", "#313131")])
 
     def _init_hint(self):
         self.txt_steps.configure(state="normal")
         self.txt_steps.delete("1.0", "end")
-        self.txt_steps.insert("end", T.HINT)
+        self.txt_steps.insert("end", "여기에 변환 과정이 표시됩니다.")
         self.txt_steps.configure(state="disabled")
 
     def _hist_refresh(self):
-        label = self.var_sort.get()
-        sort_mode = next((code for text, code in SORT_CHOICES if text == label), "time_desc")
-        query = self.var_search.get()
+        mode = self.var_sort.get()
+        query = self.var_search.get().strip()
+        
+        sort_map = {
+            "최신순": "time_desc",
+            "오래된순": "time_asc",
+            "입력 A→Z": "expr_asc",
+            "입력 Z→A": "expr_desc"
+        }
+        sort_mode = sort_map.get(mode, "time_desc")
+        
         self._hist_view = self.hist.list_items(query=query, sort_mode=sort_mode)
 
-        for iid in self.tree.get_children():
-            self.tree.delete(iid)
+        for i in self.tree.get_children():
+            self.tree.delete(i)
 
-        for idx, h in enumerate(self._hist_view):
-            bases = f"{h.base_from}→{h.base_to}"
-            self.tree.insert("", "end", iid=str(idx),
-                             values=(h.expr, bases, h.result))
-
-    def on_help(self):
-        win = ctk.CTkToplevel(self)
-        win.title("도움말")
-        txt = ctk.CTkTextbox(win, wrap="word")
-        txt.pack(fill="both", expand=True, padx=10, pady=10)
-        txt.insert("end", HELP_TEXT)
-        txt.configure(state="disabled")
+        for idx, it in enumerate(self._hist_view):
+            bases = f"{it.base_from}→{it.base_to}"
+            self.tree.insert("", "end", iid=str(idx), values=(it.expr, bases, it.result))
 
     def on_clear(self):
         self.var_input.set("")
@@ -180,26 +174,42 @@ class App(ctk.CTk):
         if not sel:
             return
         idx = int(sel[0])
-        item = self._hist_view[idx]
-        self.var_input.set(item.expr)
-        self.var_from.set(str(item.base_from))
-        self.var_to.set(str(item.base_to))
+        it = self._hist_view[idx]
+        self.var_input.set(it.expr)
+        self.var_from.set(str(it.base_from))
+        self.var_to.set(str(it.base_to))
         self.on_convert()
 
     def on_convert(self):
         expr = self.var_input.get().strip()
         if not expr:
-            messagebox.showerror("오류", T.ERR_EMPTY)
+            messagebox.showerror("오류", "입력 값이 없습니다.")
             return
 
         try:
             bfrom = int(self.var_from.get())
+            if not (2 <= bfrom <= 36):
+                raise ValueError(f"입력 진법은 2~36이어야 합니다 (현재: {bfrom})")
+            
             bto = int(self.var_to.get())
+            if not (2 <= bto <= 36):
+                raise ValueError(f"출력 진법은 2~36이어야 합니다 (현재: {bto})")
+            
             prec = int(self.var_prec.get())
+            if prec < 0:
+                raise ValueError("정밀도는 0 이상이어야 합니다")
+            
             rmode = self.var_round.get()
-        except:
-            messagebox.showerror("오류", T.ERR_SETTING)
+            if rmode not in ROUND_CHOICES:
+                raise ValueError("올바르지 않은 반올림 모드입니다")
+                
+        except ValueError as e:
+            messagebox.showerror("설정 오류", str(e))
             return
+
+        self.cfg["precision"] = prec
+        self.cfg["round_mode"] = rmode
+        save_config(self.cfg)
 
         try:
             out, steps = convert(expr, bfrom, bto, precision=prec, round_mode_str=rmode)
