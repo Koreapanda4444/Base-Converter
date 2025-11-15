@@ -1,37 +1,13 @@
-import json
-from pathlib import Path
 import customtkinter as ctk
+from gui.config_manager import load_config, save_config
 
-ROOT = Path(__file__).resolve().parents[1]
-ASSETS_PATH = ROOT / "assets"
-THEME_PATH = ASSETS_PATH / "theme.json"
+def apply_theme():
+    cfg = load_config()
+    mode = cfg.get("theme", "system")
+    ctk.set_appearance_mode(mode)
 
-def load_theme():
-    try:
-        if THEME_PATH.exists():
-            return json.loads(THEME_PATH.read_text(encoding="utf-8"))
-    except Exception:
-        pass
-    return {}
-
-def _is_valid_theme(t: dict) -> bool:
-    return isinstance(t, dict) and "CTkFrame" in t
-
-def apply_theme(theme: dict | None):
-    try:
-        if _is_valid_theme(theme or {}):
-            temp_path = ASSETS_PATH / "_temp_theme.json"
-            temp_path.write_text(json.dumps(theme, indent=2, ensure_ascii=False), encoding="utf-8")
-            ctk.set_default_color_theme(str(temp_path))
-        else:
-            ctk.set_default_color_theme("blue")
-    except Exception:
-        ctk.set_default_color_theme("blue")
-
-def save_theme(theme: dict):
-    try:
-        THEME_PATH.parent.mkdir(parents=True, exist_ok=True)
-        THEME_PATH.write_text(json.dumps(theme, indent=2, ensure_ascii=False), encoding="utf-8")
-        return True
-    except Exception:
-        return False
+def set_theme(mode: str):
+    cfg = load_config()
+    cfg["theme"] = mode
+    save_config(cfg)
+    apply_theme()

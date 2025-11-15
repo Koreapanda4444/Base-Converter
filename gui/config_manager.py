@@ -12,7 +12,6 @@ else:
 CONFIG_PATH = CONFIG_DIR / "config.json"
 
 DEFAULT_CONFIG = {
-    "language": "KR",
     "theme": "system",
     "precision": 12,
     "round_mode": "HALF_UP",
@@ -24,7 +23,9 @@ def load_config() -> dict:
     try:
         if CONFIG_PATH.exists():
             d = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-            x = DEFAULT_CONFIG.copy(); x.update(d); return x
+            x = DEFAULT_CONFIG.copy()
+            x.update(d)
+            return x
     except Exception:
         pass
     return DEFAULT_CONFIG.copy()
@@ -32,6 +33,9 @@ def load_config() -> dict:
 def save_config(data: dict):
     try:
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        CONFIG_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        CONFIG_PATH.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2),
+            encoding="utf-8"
+        )
     except Exception:
         pass
