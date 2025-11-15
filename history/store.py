@@ -167,4 +167,4 @@ class HistoryStore:
             self.items = clean + self.items
             self.items = self.items[:MAX_ITEMS]
 
-        self._save()
+        self._save()    
