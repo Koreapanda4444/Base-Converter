@@ -1,76 +1,119 @@
-# Base Converter
+Base Converter
 
-다양한 진법 변환을 지원하는 파이썬 애플리케이션입니다. 직관적인 그래픽 인터페이스(GUI)와 강력한 명령줄 인터페이스(CLI)를 모두 제공합니다.
+다양한 진법 변환을 지원하는 Python 기반 애플리케이션입니다.
+GUI와 CLI 모두 제공하며, 실수·표현식·혼합 진법까지 변환할 수 있습니다.
 
-## ✨ 주요 기능
+⭐ 특징
+🔹 공통 기능
 
-### 공통
-- **2진법 ~ 36진법** 변환 지원
-- 정수, 실수 및 간단한 사칙연산(`+`, `-`, `*`, `/`) 표현식 변환
-- 다양한 반올림 모드 및 정밀도 설정
+2진수 ~ 36진수 변환
 
-### GUI (Graphical User Interface)
-- 실시간 변환 및 변환 과정 표시
-- 모든 변환 기록을 자동으로 저장하는 **히스토리** 기능
-- 히스토리 검색 및 정렬 (시간순, 입력값순)
-- 사용자가 설정한 정밀도, 반올림 모드 자동 저장
-- 시스템 설정에 따른 다크/라이트 모드 자동 지원
+정수, 실수, 분수(Fraction) 모두 처리
 
-### CLI (Command-Line Interface)
-- 단일 표현식 변환
-- CSV 파일을 이용한 **배치(일괄) 변환**
-- 결과 포맷팅 옵션 (소문자, 4자리 그룹핑, `0b`/`0x` 접두사 등)
+0b, 0x, (FF)_16 같은 혼합 진법 자동 인식
 
-## ⚙️ 설치 및 요구사항
+기본 사칙연산·괄호·변수(assign) 지원 (x = 10, x + 5)
 
-1.  **Python 3.7 이상**이 설치되어 있어야 합니다.
-2.  필요한 라이브러리를 설치합니다.
+다양한 반올림 모드 (HALF_UP, CEILING, …)
 
-    ```shell
-    pip install customtkinter
-    ```
+정밀도 지정 (precision)
 
-## 🚀 실행 방법
+변환 과정 출력
 
-### GUI 실행
-터미널에서 다음 명령어를 실행하세요.
-```shell
+🖥 GUI (CustomTkinter)
+
+입력 → 변환 과정 실시간 표시
+
+변환 기록 자동 저장
+(검색/정렬: 최신순, A→Z 등)
+
+사용자 설정 자동 저장 (config.json)
+
+시스템 테마 기반 다크/라이트 모드 지원
+
+기록 더블클릭 → 자동 재입력
+
+💻 CLI
+python -m cli.main --from 10 --to 2 "3.14"
+
+
+지원 옵션:
+
+--from, --to : 변환 진법 설정
+
+--precision : 정밀도
+
+--round : 반올림 모드
+
+--lower : 소문자 출력
+
+--group4 : 4자리 그룹핑
+
+--underscore : group separator _
+
+--prefix : 0b/0o/0x 접두사
+
+--sci : 과학적 표기법
+
+--sig N : 유효숫자 제한
+
+--batch : CSV 일괄 변환
+
+예시:
+
+python -m cli.main --batch --input input.csv --output result.csv
+
+🔌 Portable 모드 지원
+
+프로그램 폴더 안에 portable.flag 파일을 만들면
+모든 데이터가 로컬 폴더의 data/ 아래에 저장됩니다.
+
+Base-Converter/
+ ├─ portable.flag
+ └─ data/
+      ├─ config.json
+      ├─ history.json
+      └─ vars.json
+
+
+USB에서 들고 다니며 사용할 때 유용합니다.
+
+📁 프로젝트 구조
+Base-Converter/
+├─ cli/
+│   └─ main.py              # CLI 실행 진입점
+│
+├─ converter/
+│   ├─ logic.py             # 진법 변환 및 수식 처리
+│   ├─ utils.py             # 토큰화·숫자 판별·반올림 처리
+│   └─ vars.py              # 변수 저장 시스템
+│
+├─ gui/
+│   ├─ main.py              # GUI 실행 진입점
+│   ├─ ui.py                # GUI 화면 구성
+│   └─ config_manager.py    # GUI 설정 저장/불러오기
+│
+├─ history/
+│   └─ store.py             # 변환 기록 저장/검색 기능
+│
+└─ data/                    # portable 모드에서 생성됨
+
+🚀 설치 및 실행
+1) 의존성
+pip install customtkinter
+
+2) GUI 실행
 python -m gui.main
-```
 
-### CLI 실행
-터미널에서 다음 명령어를 실행하여 상세한 도움말을 볼 수 있습니다.
-```shell
+3) CLI 도움말
 python -m cli.main --guide
-```
 
-**CLI 사용 예시:**
-```shell
-# 16진수 'FF'를 10진수로 변환
+🔍 예시
+간단 변환
 python -m cli.main --from 16 --to 10 "FF"
 
-# 10진수 '3.14'를 2진수로 변환 (정밀도 16자리)
-python -m cli.main --from 10 --to 2 --precision 16 "3.14"
+표현식 계산
+python -m cli.main --from 10 --to 2 "3.5 + 1.25"
 
-# CSV 파일 일괄 변환
-python -m cli.main --batch --input "input.csv" --output "result.csv"
-```
-
-##  portability.flag)
-프로그램이 있는 폴더에 `portable.flag`라는 이름의 빈 파일을 생성하면, 모든 설정(`config.json`)과 히스토리(`history.json`)가 프로그램 폴더 내 `data` 폴더에 저장됩니다. 이 기능을 사용하면 USB 메모리 등에서 설정을 유지하며 프로그램을 사용할 수 있습니다.
-
-## 📁 프로젝트 구조
-
-```
-Base-Converter/
-├── cli/              # CLI 관련 코드
-│   └── main.py
-├── converter/        # 핵심 변환 로직
-│   └── logic.py
-├── gui/              # GUI 관련 코드
-│   ├── main.py
-│   ├── ui.py
-│   └── config_manager.py
-└── history/          # 히스토리 저장 및 관리
-    └── store.py
-```
+혼합 진법
+0xA + (1011)_2 * 3
