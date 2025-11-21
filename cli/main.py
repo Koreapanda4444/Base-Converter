@@ -1,5 +1,16 @@
 import argparse, csv, sys
-from converter.logic import convert
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+try:
+    from converter.logic import convert
+except ModuleNotFoundError:
+    print(f"오류: 'converter' 패키지를 찾을 수 없습니다. 루트 경로 추가됨: {ROOT}", file=sys.stderr)
+    print("대안 실행:\n  cd d:\\vscode_script\\python\\Base-Converter\n  python -m cli.main --from 10 --to 2 255", file=sys.stderr)
+    raise
 
 GUIDE_TEXT = """
 === Base-Converter CLI 가이드 ===
@@ -92,6 +103,50 @@ def run_batch(args):
         writer.writerows(rows)
     print(f"성공적으로 처리하여 '{args.output}'에 저장했습니다.")
 
+def repl(args):
+    """대화형 모드: 표현식을 반복 입력받아 변환."""
+    print("Interactive mode 시작. (종료: :q 또는 :quit)")
+    print("명령: :set from N | :set to N | :help")
+    while True:
+        try:
+            line = input(f"[from={args.base_from} -> to={args.base_to}] expr> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+        if not line:
+            continue
+        low = line.lower()
+        if low in (":q", ":quit", ":exit", "q", "quit", "exit"):
+            break
+        if low in (":h", ":help", "help"):
+            print("표현식을 입력하면 변환합니다. 예) 255 또는 \"1011 + 1101\"")
+            print("설정 변경: :set from N | :set to N  (N은 2~36)")
+            continue
+        if low.startswith(":set"):
+            parts = line.split()
+            if len(parts) == 3 and parts[1] in ("from", "to"):
+                try:
+                    val = int(parts[2])
+                    if not (2 <= val <= 36):
+                        print("기수는 2~36 범위여야 합니다.")
+                        continue
+                    if parts[1] == "from":
+                        args.base_from = val
+                    else:
+                        args.base_to = val
+                    print(f"설정 변경: from={args.base_from}, to={args.base_to}")
+                except ValueError:
+                    print("정수를 입력하세요.")
+            else:
+                print("사용법: :set from N | :set to N")
+            continue
+        try:
+            fmt = _get_format_options(args)
+            out, _ = convert(line, args.base_from, args.base_to, args.precision, args.round, fmt)
+            print(out)
+        except Exception as e:
+            print(f"오류: {e}")
+
 def main():
     p = argparse.ArgumentParser(add_help=False, description="Base Converter CLI")
     p.add_argument("--from", dest="base_from", type=int, default=10)
@@ -123,9 +178,10 @@ def main():
             run_batch(args)
         else:
             if not args.expr:
-                print("오류: 변환할 식이 필요합니다.", file=sys.stderr)
-                sys.exit(1)
-            run_once(args)
+                # 인자 없는 경우: 대화형 모드로 진입
+                repl(args)
+            else:
+                run_once(args)
     except Exception as e:
         print(f"예상치 못한 오류가 발생했습니다: {e}", file=sys.stderr)
         sys.exit(1)
