@@ -8,7 +8,13 @@ from radixscope.core.digits import (
     validate_digit,
     validate_digits,
 )
-from radixscope.core.errors import InvalidBaseError, InvalidDigitError, RadixScopeError
+from radixscope.core.errors import (
+    InvalidBaseError,
+    InvalidDigitError,
+    InvalidNumberError,
+    RadixScopeError,
+)
+from radixscope.core.parse import parse_integer
 from radixscope.core.value import ExactValue
 
 __all__ = [
@@ -18,9 +24,11 @@ __all__ = [
     "ExactValue",
     "InvalidBaseError",
     "InvalidDigitError",
+    "InvalidNumberError",
     "RadixScopeError",
     "digit_char",
     "digit_value",
+    "parse_integer",
     "validate_base",
     "validate_digit",
     "validate_digits",

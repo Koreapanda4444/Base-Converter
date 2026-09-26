@@ -8,3 +8,7 @@ class InvalidBaseError(RadixScopeError):
 
 class InvalidDigitError(RadixScopeError):
     pass
+
+
+class InvalidNumberError(RadixScopeError):
+    pass
