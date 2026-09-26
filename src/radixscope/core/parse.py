@@ -51,3 +51,27 @@ def parse_finite(text: str, base: object) -> ExactValue:
     denominator = checked_base ** len(fractional_digits)
     numerator = integer_value * denominator + fractional_value
     return ExactValue(sign * numerator, denominator)
+
+
+def parse_ratio(text: str, base: object) -> ExactValue:
+    checked_base = validate_base(base)
+    normalized = _normalized_text(text)
+    if normalized.count("/") != 1:
+        raise InvalidNumberError("a ratio requires one fraction separator")
+    numerator_text, denominator_text = normalized.split("/")
+    if not numerator_text or not denominator_text:
+        raise InvalidNumberError("a ratio requires a numerator and denominator")
+    numerator = parse_integer(numerator_text, checked_base)
+    denominator = parse_integer(denominator_text, checked_base)
+    if denominator.numerator == 0:
+        raise InvalidNumberError("denominator cannot be zero")
+    return ExactValue(numerator.numerator, denominator.numerator)
+
+
+def parse_number(text: str, base: object) -> ExactValue:
+    normalized = _normalized_text(text)
+    if "/" in normalized:
+        return parse_ratio(normalized, base)
+    if "." in normalized:
+        return parse_finite(normalized, base)
+    return parse_integer(normalized, base)
