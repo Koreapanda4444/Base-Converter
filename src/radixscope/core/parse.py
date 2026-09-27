@@ -68,10 +68,44 @@ def parse_ratio(text: str, base: object) -> ExactValue:
     return ExactValue(numerator.numerator, denominator.numerator)
 
 
+def parse_recurring(text: str, base: object) -> ExactValue:
+    checked_base = validate_base(base)
+    sign, unsigned = _split_sign(_normalized_text(text))
+    if unsigned.count(".") != 1:
+        raise InvalidNumberError("a recurring fraction requires one decimal point")
+    if unsigned.count("(") != 1 or unsigned.count(")") != 1 or not unsigned.endswith(")"):
+        raise InvalidNumberError("a recurring fraction requires one final recurring group")
+    integer_digits, fractional_section = unsigned.split(".")
+    nonrecurring_digits, recurring_section = fractional_section.split("(")
+    recurring_digits = recurring_section[:-1]
+    if not integer_digits:
+        raise InvalidNumberError("a recurring fraction requires an integer part")
+    if not recurring_digits:
+        raise InvalidNumberError("a recurring group cannot be empty")
+    integer_value = _parse_unsigned_digits(integer_digits, checked_base)
+    nonrecurring_value = (
+        _parse_unsigned_digits(nonrecurring_digits, checked_base)
+        if nonrecurring_digits
+        else 0
+    )
+    recurring_value = _parse_unsigned_digits(recurring_digits, checked_base)
+    prefix_scale = checked_base ** len(nonrecurring_digits)
+    recurring_scale = checked_base ** len(recurring_digits) - 1
+    denominator = prefix_scale * recurring_scale
+    numerator = (
+        integer_value * denominator
+        + nonrecurring_value * recurring_scale
+        + recurring_value
+    )
+    return ExactValue(sign * numerator, denominator)
+
+
 def parse_number(text: str, base: object) -> ExactValue:
     normalized = _normalized_text(text)
     if "/" in normalized:
         return parse_ratio(normalized, base)
+    if "(" in normalized or ")" in normalized:
+        return parse_recurring(normalized, base)
     if "." in normalized:
         return parse_finite(normalized, base)
     return parse_integer(normalized, base)

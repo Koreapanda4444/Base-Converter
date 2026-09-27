@@ -14,7 +14,13 @@ from radixscope.core.errors import (
     InvalidNumberError,
     RadixScopeError,
 )
-from radixscope.core.parse import parse_finite, parse_integer, parse_number, parse_ratio
+from radixscope.core.parse import (
+    parse_finite,
+    parse_integer,
+    parse_number,
+    parse_ratio,
+    parse_recurring,
+)
 from radixscope.core.value import ExactValue
 
 __all__ = [
@@ -32,6 +38,7 @@ __all__ = [
     "parse_integer",
     "parse_number",
     "parse_ratio",
+    "parse_recurring",
     "validate_base",
     "validate_digit",
     "validate_digits",
