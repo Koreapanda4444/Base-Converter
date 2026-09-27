@@ -12,8 +12,10 @@ from radixscope.core.errors import (
     InvalidBaseError,
     InvalidDigitError,
     InvalidNumberError,
+    NonIntegerValueError,
     RadixScopeError,
 )
+from radixscope.core.formatting import format_integer
 from radixscope.core.parse import (
     parse_finite,
     parse_integer,
@@ -31,9 +33,11 @@ __all__ = [
     "InvalidBaseError",
     "InvalidDigitError",
     "InvalidNumberError",
+    "NonIntegerValueError",
     "RadixScopeError",
     "digit_char",
     "digit_value",
+    "format_integer",
     "parse_finite",
     "parse_integer",
     "parse_number",

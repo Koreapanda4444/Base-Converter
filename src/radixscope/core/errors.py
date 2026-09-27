@@ -12,3 +12,7 @@ class InvalidDigitError(RadixScopeError):
 
 class InvalidNumberError(RadixScopeError):
     pass
+
+
+class NonIntegerValueError(RadixScopeError):
+    pass
