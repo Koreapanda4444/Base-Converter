@@ -42,6 +42,8 @@ __all__ = [
     "NonIntegerValueError",
     "RadixScopeError",
     "RoundingMode",
+    "convert_bases",
+    "convert_text",
     "digit_char",
     "digit_value",
     "format_exact",
@@ -57,3 +59,4 @@ __all__ = [
     "validate_digit",
     "validate_digits",
 ]
+from radixscope.core.conversion import convert_bases, convert_text
