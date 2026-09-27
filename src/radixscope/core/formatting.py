@@ -1,6 +1,16 @@
+from enum import StrEnum
+
 from radixscope.core.digits import digit_char, validate_base
 from radixscope.core.errors import NonIntegerValueError
 from radixscope.core.value import ExactValue
+
+
+class RoundingMode(StrEnum):
+    TRUNCATE = "truncate"
+    HALF_UP = "half-up"
+    HALF_EVEN = "half-even"
+    FLOOR = "floor"
+    CEILING = "ceiling"
 
 
 def format_integer(value: ExactValue, base: object) -> str:
@@ -57,3 +67,72 @@ def format_exact(value: ExactValue, base: object) -> str:
         fractional_text += f"({''.join(recurring_digits)})"
     prefix = "-" if value.numerator < 0 else ""
     return f"{prefix}{integer_text}.{fractional_text}"
+
+
+def _validated_precision(precision: object) -> int:
+    if isinstance(precision, bool) or not isinstance(precision, int):
+        raise ValueError("precision must be an integer")
+    if precision < 0:
+        raise ValueError("precision cannot be negative")
+    return precision
+
+
+def _rounded_scaled_integer(
+    value: ExactValue,
+    scale: int,
+    mode: RoundingMode,
+) -> int:
+    absolute_scaled_numerator = abs(value.numerator) * scale
+    quotient, remainder = divmod(absolute_scaled_numerator, value.denominator)
+    increment = False
+    if mode is RoundingMode.HALF_UP:
+        increment = remainder * 2 >= value.denominator
+    elif mode is RoundingMode.HALF_EVEN:
+        doubled_remainder = remainder * 2
+        increment = doubled_remainder > value.denominator or (
+            doubled_remainder == value.denominator and quotient % 2 == 1
+        )
+    elif mode is RoundingMode.FLOOR:
+        increment = value.numerator < 0 and remainder != 0
+    elif mode is RoundingMode.CEILING:
+        increment = value.numerator > 0 and remainder != 0
+    rounded = quotient + int(increment)
+    return -rounded if value.numerator < 0 else rounded
+
+
+def format_rounded(
+    value: ExactValue,
+    base: object,
+    precision: object,
+    mode: RoundingMode = RoundingMode.HALF_EVEN,
+) -> str:
+    checked_base = validate_base(base)
+    checked_precision = _validated_precision(precision)
+    if not isinstance(value, ExactValue):
+        raise TypeError("value must be an ExactValue")
+    if not isinstance(mode, RoundingMode):
+        raise TypeError("mode must be a RoundingMode")
+    scale = checked_base**checked_precision
+    scaled_integer = _rounded_scaled_integer(value, scale, mode)
+    absolute_scaled_integer = abs(scaled_integer)
+    integer_part, fractional_part = divmod(absolute_scaled_integer, scale)
+    prefix = "-" if scaled_integer < 0 else ""
+    integer_text = format_integer(ExactValue(integer_part), checked_base)
+    if checked_precision == 0:
+        return prefix + integer_text
+    fractional_text = format_integer(ExactValue(fractional_part), checked_base).rjust(
+        checked_precision,
+        "0",
+    )
+    return f"{prefix}{integer_text}.{fractional_text}"
+
+
+def format_value(
+    value: ExactValue,
+    base: object,
+    precision: object | None = None,
+    rounding: RoundingMode = RoundingMode.HALF_EVEN,
+) -> str:
+    if precision is None:
+        return format_exact(value, base)
+    return format_rounded(value, base, precision, rounding)

@@ -15,7 +15,13 @@ from radixscope.core.errors import (
     NonIntegerValueError,
     RadixScopeError,
 )
-from radixscope.core.formatting import format_exact, format_integer
+from radixscope.core.formatting import (
+    RoundingMode,
+    format_exact,
+    format_integer,
+    format_rounded,
+    format_value,
+)
 from radixscope.core.parse import (
     parse_finite,
     parse_integer,
@@ -35,10 +41,13 @@ __all__ = [
     "InvalidNumberError",
     "NonIntegerValueError",
     "RadixScopeError",
+    "RoundingMode",
     "digit_char",
     "digit_value",
     "format_exact",
     "format_integer",
+    "format_rounded",
+    "format_value",
     "parse_finite",
     "parse_integer",
     "parse_number",
