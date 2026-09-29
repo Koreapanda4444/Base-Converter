@@ -29,13 +29,23 @@ from radixscope.core.parse import (
     parse_ratio,
     parse_recurring,
 )
+from radixscope.core.trace import (
+    ConversionTrace,
+    FractionMultiplicationStep,
+    IntegerDivisionStep,
+    trace_text,
+    trace_value,
+)
 from radixscope.core.value import ExactValue
 
 __all__ = [
     "DIGIT_ALPHABET",
     "MAX_BASE",
     "MIN_BASE",
+    "ConversionTrace",
     "ExactValue",
+    "FractionMultiplicationStep",
+    "IntegerDivisionStep",
     "InvalidBaseError",
     "InvalidDigitError",
     "InvalidNumberError",
@@ -55,6 +65,8 @@ __all__ = [
     "parse_number",
     "parse_ratio",
     "parse_recurring",
+    "trace_text",
+    "trace_value",
     "validate_base",
     "validate_digit",
     "validate_digits",
