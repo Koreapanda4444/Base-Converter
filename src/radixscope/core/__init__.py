@@ -9,14 +9,17 @@ from radixscope.core.digits import (
     validate_digits,
 )
 from radixscope.core.errors import (
+    IntegerRangeError,
     InvalidBaseError,
     InvalidDigitError,
     InvalidExpressionError,
     InvalidNumberError,
+    InvalidWidthError,
     NonIntegerValueError,
     RadixScopeError,
 )
 from radixscope.core.expression import evaluate_expression
+from radixscope.core.fixed_width import FixedWidthInteger, integer_bounds, validate_width
 from radixscope.core.formatting import (
     RoundingMode,
     format_exact,
@@ -46,12 +49,15 @@ __all__ = [
     "MIN_BASE",
     "ConversionTrace",
     "ExactValue",
+    "FixedWidthInteger",
     "FractionMultiplicationStep",
     "IntegerDivisionStep",
+    "IntegerRangeError",
     "InvalidBaseError",
     "InvalidDigitError",
     "InvalidExpressionError",
     "InvalidNumberError",
+    "InvalidWidthError",
     "NonIntegerValueError",
     "RadixScopeError",
     "RoundingMode",
@@ -64,6 +70,7 @@ __all__ = [
     "format_integer",
     "format_rounded",
     "format_value",
+    "integer_bounds",
     "parse_finite",
     "parse_integer",
     "parse_number",
@@ -74,5 +81,6 @@ __all__ = [
     "validate_base",
     "validate_digit",
     "validate_digits",
+    "validate_width",
 ]
 from radixscope.core.conversion import convert_bases, convert_text

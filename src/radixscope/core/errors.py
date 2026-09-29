@@ -18,5 +18,13 @@ class InvalidExpressionError(RadixScopeError):
     pass
 
 
+class InvalidWidthError(RadixScopeError):
+    pass
+
+
+class IntegerRangeError(RadixScopeError):
+    pass
+
+
 class NonIntegerValueError(RadixScopeError):
     pass
