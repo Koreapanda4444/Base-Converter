@@ -1,3 +1,5 @@
+from typing import cast
+
 import pytest
 
 from radixscope.core import (
@@ -34,7 +36,7 @@ def test_fixed_width_integer_properties() -> None:
 @pytest.mark.parametrize("width", [0, -1, True, 8.0])
 def test_invalid_width(width: object) -> None:
     with pytest.raises(InvalidWidthError):
-        FixedWidthInteger(0, width)
+        FixedWidthInteger(0, cast(int, width))
 
 
 @pytest.mark.parametrize(
@@ -54,4 +56,4 @@ def test_out_of_range_integer(value: int, width: int, signed: bool) -> None:
 @pytest.mark.parametrize("value", [True, 1.5, "1"])
 def test_fixed_width_value_must_be_integer(value: object) -> None:
     with pytest.raises(TypeError):
-        FixedWidthInteger(value, 8)
+        FixedWidthInteger(cast(int, value), 8)
