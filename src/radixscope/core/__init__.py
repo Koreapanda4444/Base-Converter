@@ -19,7 +19,15 @@ from radixscope.core.errors import (
     RadixScopeError,
 )
 from radixscope.core.expression import evaluate_expression
-from radixscope.core.fixed_width import FixedWidthInteger, integer_bounds, validate_width
+from radixscope.core.fixed_width import (
+    FixedWidthInteger,
+    decode_twos_complement,
+    encode_twos_complement,
+    format_twos_complement,
+    integer_bounds,
+    parse_twos_complement,
+    validate_width,
+)
 from radixscope.core.formatting import (
     RoundingMode,
     format_exact,
@@ -63,12 +71,15 @@ __all__ = [
     "RoundingMode",
     "convert_bases",
     "convert_text",
+    "decode_twos_complement",
     "digit_char",
     "digit_value",
+    "encode_twos_complement",
     "evaluate_expression",
     "format_exact",
     "format_integer",
     "format_rounded",
+    "format_twos_complement",
     "format_value",
     "integer_bounds",
     "parse_finite",
@@ -76,6 +87,7 @@ __all__ = [
     "parse_number",
     "parse_ratio",
     "parse_recurring",
+    "parse_twos_complement",
     "trace_text",
     "trace_value",
     "validate_base",
