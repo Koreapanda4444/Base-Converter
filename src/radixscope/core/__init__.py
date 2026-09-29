@@ -11,10 +11,12 @@ from radixscope.core.digits import (
 from radixscope.core.errors import (
     InvalidBaseError,
     InvalidDigitError,
+    InvalidExpressionError,
     InvalidNumberError,
     NonIntegerValueError,
     RadixScopeError,
 )
+from radixscope.core.expression import evaluate_expression
 from radixscope.core.formatting import (
     RoundingMode,
     format_exact,
@@ -48,6 +50,7 @@ __all__ = [
     "IntegerDivisionStep",
     "InvalidBaseError",
     "InvalidDigitError",
+    "InvalidExpressionError",
     "InvalidNumberError",
     "NonIntegerValueError",
     "RadixScopeError",
@@ -56,6 +59,7 @@ __all__ = [
     "convert_text",
     "digit_char",
     "digit_value",
+    "evaluate_expression",
     "format_exact",
     "format_integer",
     "format_rounded",

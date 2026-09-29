@@ -14,5 +14,9 @@ class InvalidNumberError(RadixScopeError):
     pass
 
 
+class InvalidExpressionError(RadixScopeError):
+    pass
+
+
 class NonIntegerValueError(RadixScopeError):
     pass
