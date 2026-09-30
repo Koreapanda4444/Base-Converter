@@ -1,7 +1,38 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TypeAlias
+
 from radixscope.core.errors import InvalidExpressionError, RadixScopeError
 from radixscope.core.parse import parse_number
-from radixscope.core.tokenize import ExpressionToken, tokenize_expression
+from radixscope.core.tokenize import ExpressionToken, TokenKind, tokenize_expression
 from radixscope.core.value import ExactValue
+
+
+@dataclass(frozen=True, slots=True)
+class LiteralExpression:
+    value: ExactValue
+    text: str
+    position: int
+    end: int
+
+
+@dataclass(frozen=True, slots=True)
+class UnaryExpression:
+    operator: TokenKind
+    operand: ExpressionNode
+    position: int
+
+
+@dataclass(frozen=True, slots=True)
+class BinaryExpression:
+    operator: TokenKind
+    left: ExpressionNode
+    right: ExpressionNode
+    position: int
+
+
+ExpressionNode: TypeAlias = LiteralExpression | UnaryExpression | BinaryExpression
 
 
 class _ExpressionParser:
@@ -18,73 +49,118 @@ class _ExpressionParser:
         self.position += 1
         return token
 
-    def parse(self) -> ExactValue:
-        if self.current.kind == "end":
+    def parse(self) -> ExpressionNode:
+        if self.current.kind is TokenKind.END:
             raise InvalidExpressionError("expression cannot be empty")
-        value = self.parse_expression()
-        if self.current.kind != "end":
+        node = self.parse_sum()
+        remaining = self.tokens[self.position]
+        if remaining.kind is not TokenKind.END:
             raise InvalidExpressionError(
-                f"unexpected token {self.current.text!r} at position {self.current.position}"
+                f"unexpected token {remaining.text!r} at position {remaining.position}"
             )
-        return value
+        return node
 
-    def parse_expression(self) -> ExactValue:
-        value = self.parse_term()
-        while self.current.kind in {"+", "-"}:
-            operator = self.advance().kind
-            operand = self.parse_term()
-            value = value + operand if operator == "+" else value - operand
-        return value
+    def parse_sum(self) -> ExpressionNode:
+        node = self.parse_product()
+        while self.current.kind in {TokenKind.PLUS, TokenKind.MINUS}:
+            operator = self.advance()
+            node = BinaryExpression(operator.kind, node, self.parse_product(), operator.position)
+        return node
 
-    def parse_term(self) -> ExactValue:
-        value = self.parse_factor()
-        while self.current.kind in {"*", "/"}:
-            operator = self.advance().kind
-            operand = self.parse_factor()
-            if operator == "*":
-                value = value * operand
-            else:
-                try:
-                    value = value / operand
-                except ZeroDivisionError as error:
-                    raise InvalidExpressionError("division by zero") from error
-        return value
+    def parse_product(self) -> ExpressionNode:
+        node = self.parse_unary()
+        while self.current.kind in {TokenKind.MULTIPLY, TokenKind.DIVIDE}:
+            operator = self.advance()
+            node = BinaryExpression(operator.kind, node, self.parse_unary(), operator.position)
+        return node
 
-    def parse_factor(self) -> ExactValue:
-        if self.current.kind == "+":
-            self.advance()
-            return self.parse_factor()
-        if self.current.kind == "-":
-            self.advance()
-            return -self.parse_factor()
-        return self.parse_primary()
+    def parse_unary(self) -> ExpressionNode:
+        if self.current.kind in {TokenKind.PLUS, TokenKind.MINUS}:
+            operator = self.advance()
+            return UnaryExpression(operator.kind, self.parse_unary(), operator.position)
+        return self.parse_power()
 
-    def parse_primary(self) -> ExactValue:
+    def parse_power(self) -> ExpressionNode:
+        node = self.parse_primary()
+        if self.current.kind is TokenKind.POWER:
+            operator = self.advance()
+            return BinaryExpression(operator.kind, node, self.parse_unary(), operator.position)
+        return node
+
+    def parse_primary(self) -> ExpressionNode:
         token = self.current
-        if token.kind == "literal":
+        if token.kind is TokenKind.LITERAL:
             self.advance()
             base_text, numeral = token.text.split("#", 1)
             try:
-                return parse_number(numeral, int(base_text))
+                value = parse_number(numeral, int(base_text))
             except RadixScopeError as error:
                 raise InvalidExpressionError(
                     f"invalid literal {token.text!r} at position {token.position}: {error}"
                 ) from error
-        if token.kind == "(":
+            return LiteralExpression(value, token.text, token.position, token.end)
+        if token.kind is TokenKind.LEFT_PAREN:
             self.advance()
-            value = self.parse_expression()
-            if self.current.kind != ")":
+            node = self.parse_sum()
+            if self.current.kind is not TokenKind.RIGHT_PAREN:
                 raise InvalidExpressionError(
                     f"missing closing parenthesis at position {token.position}"
                 )
             self.advance()
-            return value
-        if token.kind == "end":
-            raise InvalidExpressionError("unexpected end of expression")
+            return node
         raise InvalidExpressionError(
             f"expected a literal or parenthesis at position {token.position}"
         )
 
 
+def parse_expression(expression: str) -> ExpressionNode:
+    try:
+        return _ExpressionParser(expression).parse()
+    except RecursionError as error:
+        raise InvalidExpressionError("expression nesting is too deep") from error
+
+
+def _evaluate_node(node: ExpressionNode) -> ExactValue:
+    if isinstance(node, LiteralExpression):
+        return node.value
+    if isinstance(node, UnaryExpression):
+        value = _evaluate_node(node.operand)
+        if node.operator is TokenKind.PLUS:
+            return value
+        if node.operator is TokenKind.MINUS:
+            return -value
+        raise InvalidExpressionError(f"unsupported unary operator: {node.operator}")
+    if not isinstance(node, BinaryExpression):
+        raise TypeError("node must be an ExpressionNode")
+    left = _evaluate_node(node.left)
+    right = _evaluate_node(node.right)
+    if node.operator is TokenKind.PLUS:
+        return left + right
+    if node.operator is TokenKind.MINUS:
+        return left - right
+    if node.operator is TokenKind.MULTIPLY:
+        return left * right
+    if node.operator is TokenKind.DIVIDE:
+        if right.numerator == 0:
+            raise InvalidExpressionError(f"division by zero at position {node.position}")
+        return left / right
+    if node.operator is TokenKind.POWER:
+        if not right.is_integer:
+            raise InvalidExpressionError(f"exponent must be an integer at position {node.position}")
+        if left.numerator == 0 and right.numerator < 0:
+            raise InvalidExpressionError(
+                f"zero cannot have a negative exponent at position {node.position}"
+            )
+        return left ** right.numerator
+    raise InvalidExpressionError(f"unsupported binary operator: {node.operator}")
+
+
+def evaluate_parsed_expression(node: ExpressionNode) -> ExactValue:
+    try:
+        return _evaluate_node(node)
+    except RecursionError as error:
+        raise InvalidExpressionError("expression nesting is too deep") from error
+
+
 def evaluate_expression(expression: str) -> ExactValue:
-    return _ExpressionParser(expression).parse()
+    return evaluate_parsed_expression(parse_expression(expression))

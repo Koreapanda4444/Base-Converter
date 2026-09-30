@@ -73,6 +73,28 @@ whitespace within a literal is not allowed. Literal digits and base labels use A
 Signs are separate tokens, and recurring parentheses belong to their numeric literal.
 The `**` operator is emitted as one power token rather than two multiplication tokens.
 
+## Expression parsing and evaluation
+
+`parse_expression` returns an immutable tree of literal, unary and binary nodes.
+`evaluate_parsed_expression` evaluates that tree, and `evaluate_expression` combines both.
+All literals and intermediate results remain exact rational values.
+
+```text
+expression = product (("+" | "-") product)*
+product    = unary (("*" | "/") unary)*
+unary      = ("+" | "-") unary | power
+power      = primary ("**" unary)?
+primary    = literal | "(" expression ")"
+```
+
+Addition, subtraction, multiplication and division associate left to right.
+Power associates right to left: `10#2**10#3**10#2` is `512`.
+Power binds tighter than a leading sign: `-10#2**10#2` is `-4`.
+Exponents must evaluate to integers; negative exponents produce exact reciprocals.
+Zero to a negative power and division by zero are invalid. Zero to the zeroth power is `1`.
+Errors identify the operator or token position; excessive nesting raises a domain error.
+Variable names, assignments, function calls and implicit multiplication are not supported.
+
 ## Errors
 
 The core rejects:
