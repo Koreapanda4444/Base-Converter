@@ -31,9 +31,12 @@ def _read_literal(expression: str, start: int) -> tuple[ExpressionToken, int]:
     position = start
     while position < len(expression) and expression[position] in _DIGITS:
         position += 1
-    if position >= len(expression) or expression[position] != "#":
-        raise InvalidExpressionError(f"expected a base-prefixed literal at position {start}")
-    position += 1
+    if position < len(expression) and expression[position] == "#":
+        position += 1
+    elif expression[start : start + 2].lower() in {"0b", "0o", "0x"}:
+        position = start + 2
+    else:
+        position = start
     numeral_start = position
     while position < len(expression) and expression[position] in _NUMERAL_DIGITS:
         position += 1

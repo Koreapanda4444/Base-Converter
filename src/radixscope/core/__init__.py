@@ -43,6 +43,7 @@ from radixscope.core.formatting import (
     format_rounded,
     format_value,
 )
+from radixscope.core.literals import parse_literal
 from radixscope.core.parse import (
     parse_finite,
     parse_integer,
@@ -101,6 +102,7 @@ __all__ = [
     "parse_expression",
     "parse_finite",
     "parse_integer",
+    "parse_literal",
     "parse_number",
     "parse_ratio",
     "parse_recurring",

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import TypeAlias
 
 from radixscope.core.errors import InvalidExpressionError, RadixScopeError
-from radixscope.core.parse import parse_number
+from radixscope.core.literals import parse_literal
 from radixscope.core.tokenize import ExpressionToken, TokenKind, tokenize_expression
 from radixscope.core.value import ExactValue
 
@@ -91,9 +91,8 @@ class _ExpressionParser:
         token = self.current
         if token.kind is TokenKind.LITERAL:
             self.advance()
-            base_text, numeral = token.text.split("#", 1)
             try:
-                value = parse_number(numeral, int(base_text))
+                value = parse_literal(token.text)
             except RadixScopeError as error:
                 raise InvalidExpressionError(
                     f"invalid literal {token.text!r} at position {token.position}: {error}"

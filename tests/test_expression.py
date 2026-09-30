@@ -22,7 +22,7 @@ def test_evaluate_mixed_base_expression(expression: str, expected: ExactValue) -
     "expression",
     [
         "",
-        "10",
+        "10#",
         "2#2 + 10#1",
         "10#1 / 2#0",
         "(2#1 + 8#1",

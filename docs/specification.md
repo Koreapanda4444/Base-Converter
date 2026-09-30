@@ -21,7 +21,7 @@ Digit values use the following alphabet:
 
 ## Input forms
 
-The base is supplied separately from the numeric text during the initial core implementation.
+`parse_number` takes the base separately. `parse_literal` reads the base from the numeric text.
 
 ```text
 sign      = "+" | "-"
@@ -64,6 +64,28 @@ Every accepted number is normalized to a rational value:
 - Precision limits and rounding affect only formatted output, never the stored exact value.
 - Converting a complete recurring representation back to a value must reproduce the original rational value.
 
+## Mixed-base literals
+
+Unprefixed literals use base 10. Prefixes `0b`, `0o` and `0x` select bases 2, 8 and 16;
+prefixes and digits are case-insensitive. `base#digits` selects any base from 2 through 36,
+with the base label always written in decimal. Finite and recurring fractions use the same
+syntax as `parse_number`: `0xA.F`, `2#0.(01)` and `0.1(6)` are exact values.
+An integer part is required; `.5` and `0x.F` are not accepted. Scientific notation is unsupported.
+
+`parse_literal` accepts an optional leading sign and outer whitespace for a single literal.
+In expressions, signs are unary operators. The slash is always division between two literals,
+each with its own base: `0xA / 10` is `1`, while `0xA / 16#10` is `5/8`.
+For a standalone same-base ratio, use `parse_number("A/10", 16)` instead.
+
+```python
+from radixscope.core import ExactValue, evaluate_expression, parse_literal
+
+assert parse_literal("0xA.F") == ExactValue(175, 16)
+assert evaluate_expression("0xFF + 0b10") == ExactValue(257)
+assert evaluate_expression("16#FF + 2#10") == ExactValue(257)
+assert evaluate_expression("(0x10 + 2) ** -2") == ExactValue(1, 324)
+```
+
 ## Expression tokenization
 
 `tokenize_expression` separates numeric literals, operators and grouping parentheses.
@@ -105,4 +127,4 @@ The core rejects:
 - multiple decimal points, fraction separators, or recurring groups;
 - empty recurring groups;
 - zero denominators;
-- unsupported prefixes or mixed-base syntax before those features are introduced.
+- malformed literal prefixes, invalid base labels and unsupported numeric syntax.
