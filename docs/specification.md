@@ -64,6 +64,15 @@ Every accepted number is normalized to a rational value:
 - Precision limits and rounding affect only formatted output, never the stored exact value.
 - Converting a complete recurring representation back to a value must reproduce the original rational value.
 
+## Expression tokenization
+
+`tokenize_expression` separates numeric literals, operators and grouping parentheses.
+Each immutable token carries its kind, original text and zero-based half-open source span.
+An end token marks the end of the input. Whitespace between tokens is ignored;
+whitespace within a literal is not allowed. Literal digits and base labels use ASCII.
+Signs are separate tokens, and recurring parentheses belong to their numeric literal.
+The `**` operator is emitted as one power token rather than two multiplication tokens.
+
 ## Errors
 
 The core rejects:

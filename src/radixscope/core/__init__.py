@@ -42,6 +42,7 @@ from radixscope.core.parse import (
     parse_ratio,
     parse_recurring,
 )
+from radixscope.core.tokenize import ExpressionToken, TokenKind, tokenize_expression
 from radixscope.core.trace import (
     ConversionTrace,
     FractionMultiplicationStep,
@@ -57,6 +58,7 @@ __all__ = [
     "MIN_BASE",
     "ConversionTrace",
     "ExactValue",
+    "ExpressionToken",
     "FixedWidthInteger",
     "FractionMultiplicationStep",
     "IntegerDivisionStep",
@@ -69,6 +71,7 @@ __all__ = [
     "NonIntegerValueError",
     "RadixScopeError",
     "RoundingMode",
+    "TokenKind",
     "convert_bases",
     "convert_text",
     "decode_twos_complement",
@@ -88,6 +91,7 @@ __all__ = [
     "parse_ratio",
     "parse_recurring",
     "parse_twos_complement",
+    "tokenize_expression",
     "trace_text",
     "trace_value",
     "validate_base",
