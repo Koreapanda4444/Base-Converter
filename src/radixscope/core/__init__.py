@@ -60,6 +60,15 @@ from radixscope.core.parse import (
     parse_ratio,
     parse_recurring,
 )
+from radixscope.core.representations import (
+    ByteOrder,
+    ByteRepresentation,
+    decode_ascii,
+    decode_bytes,
+    encode_ascii,
+    encode_bytes,
+    represent_bytes,
+)
 from radixscope.core.tokenize import ExpressionToken, TokenKind, tokenize_expression
 from radixscope.core.trace import (
     ConversionTrace,
@@ -76,6 +85,8 @@ __all__ = [
     "MIN_BASE",
     "ArithmeticOperation",
     "BinaryExpression",
+    "ByteOrder",
+    "ByteRepresentation",
     "ConversionTrace",
     "ExactValue",
     "ExpressionNode",
@@ -101,9 +112,13 @@ __all__ = [
     "analyze_range",
     "convert_bases",
     "convert_text",
+    "decode_ascii",
+    "decode_bytes",
     "decode_twos_complement",
     "digit_char",
     "digit_value",
+    "encode_ascii",
+    "encode_bytes",
     "encode_twos_complement",
     "evaluate_expression",
     "evaluate_parsed_expression",
@@ -123,6 +138,7 @@ __all__ = [
     "parse_ratio",
     "parse_recurring",
     "parse_twos_complement",
+    "represent_bytes",
     "tokenize_expression",
     "trace_text",
     "trace_value",

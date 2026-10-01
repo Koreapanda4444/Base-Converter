@@ -170,6 +170,25 @@ zero, while arithmetic right shift gives `-1` for a negative signed value.
 These operations apply to `FixedWidthInteger` values; the rational expression grammar
 continues to support only its documented arithmetic operators.
 
+## Endian byte and ASCII representations
+
+`encode_bytes` serializes the fixed-width bit pattern in big or little endian order,
+using exactly `ceil(width / 8)` bytes, including leading zero bytes. Byte order changes
+the sequence of bytes, not the bits inside each byte. Signed negatives retain their
+two's-complement pattern.
+
+Unused high bits in the most-significant partial byte are zero-padded. For example, signed five-bit
+`-1` encodes as `1F`, not `FF`. `decode_bytes` defaults to `len(data) * 8` bits;
+pass the original width to round-trip non-byte-aligned values. Explicit width must
+match the byte count, and nonzero unused high bits are rejected instead of discarded.
+Empty data cannot represent a fixed-width integer.
+
+`represent_bytes` returns the ordered bytes, spaced uppercase hexadecimal text and
+an ASCII preview. The preview displays printable bytes `20` through `7E` and uses a
+dot for every other byte without altering the underlying data. `encode_ascii` and
+`decode_ascii` are strict, lossless seven-bit ASCII codecs, including control characters;
+they reject non-ASCII text or bytes rather than substituting characters.
+
 ## Errors
 
 The core rejects:
