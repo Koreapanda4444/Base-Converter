@@ -117,6 +117,18 @@ Zero to a negative power and division by zero are invalid. Zero to the zeroth po
 Errors identify the operator or token position; excessive nesting raises a domain error.
 Variable names, assignments, function calls and implicit multiplication are not supported.
 
+## Fixed-width integer model
+
+`FixedWidthInteger(value, width, signed=False)` stores an immutable integer with an explicit
+positive bit width. Unsigned bounds are `0` through `2**width - 1`; signed bounds are
+`-2**(width - 1)` through `2**(width - 1) - 1`. Construction checks this range.
+Widths need not be multiples of eight. Boolean and non-integer values are rejected.
+
+`from_exact` and `from_text` connect the model to the rational core and numeric parser.
+Fractional values are rejected instead of truncated. The `exact` property returns the
+mathematical value as an `ExactValue`. `resize` preserves that value and signedness,
+checking the destination range instead of wrapping or discarding bits.
+
 ## Errors
 
 The core rejects:

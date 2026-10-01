@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 
-from radixscope.core.errors import IntegerRangeError, InvalidWidthError
+from radixscope.core.errors import IntegerRangeError, InvalidWidthError, NonIntegerValueError
+from radixscope.core.parse import parse_number
+from radixscope.core.value import ExactValue
 
 
 def validate_width(width: object) -> int:
@@ -41,6 +43,36 @@ class FixedWidthInteger:
                 f"{minimum} through {maximum}"
             )
         object.__setattr__(self, "width", checked_width)
+
+    @classmethod
+    def from_exact(
+        cls,
+        value: ExactValue,
+        width: object,
+        signed: bool = False,
+    ) -> "FixedWidthInteger":
+        if not isinstance(value, ExactValue):
+            raise TypeError("value must be an ExactValue")
+        if not value.is_integer:
+            raise NonIntegerValueError("fixed-width integers require an integer value")
+        return cls(value.numerator, validate_width(width), signed)
+
+    @classmethod
+    def from_text(
+        cls,
+        text: str,
+        base: object,
+        width: object,
+        signed: bool = False,
+    ) -> "FixedWidthInteger":
+        return cls.from_exact(parse_number(text, base), width, signed)
+
+    @property
+    def exact(self) -> ExactValue:
+        return ExactValue(self.value)
+
+    def resize(self, width: object) -> "FixedWidthInteger":
+        return type(self)(self.value, validate_width(width), self.signed)
 
     @property
     def minimum(self) -> int:
