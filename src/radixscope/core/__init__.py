@@ -29,10 +29,13 @@ from radixscope.core.expression import (
 )
 from radixscope.core.fixed_width import (
     FixedWidthInteger,
+    IntegerInterpretation,
     decode_twos_complement,
     encode_twos_complement,
     format_twos_complement,
     integer_bounds,
+    interpret_bit_pattern,
+    parse_bit_pattern,
     parse_twos_complement,
     validate_width,
 )
@@ -73,6 +76,7 @@ __all__ = [
     "FixedWidthInteger",
     "FractionMultiplicationStep",
     "IntegerDivisionStep",
+    "IntegerInterpretation",
     "IntegerRangeError",
     "InvalidBaseError",
     "InvalidDigitError",
@@ -99,6 +103,8 @@ __all__ = [
     "format_twos_complement",
     "format_value",
     "integer_bounds",
+    "interpret_bit_pattern",
+    "parse_bit_pattern",
     "parse_expression",
     "parse_finite",
     "parse_integer",

@@ -1,7 +1,12 @@
 from dataclasses import dataclass
 
-from radixscope.core.errors import IntegerRangeError, InvalidWidthError, NonIntegerValueError
-from radixscope.core.parse import parse_number
+from radixscope.core.errors import (
+    IntegerRangeError,
+    InvalidNumberError,
+    InvalidWidthError,
+    NonIntegerValueError,
+)
+from radixscope.core.parse import parse_integer, parse_number
 from radixscope.core.value import ExactValue
 
 
@@ -122,6 +127,66 @@ class FixedWidthInteger:
     def reinterpret(self, signed: bool) -> "FixedWidthInteger":
         return self.from_bit_pattern(self.bit_pattern, self.width, signed)
 
+    @classmethod
+    def from_bits(
+        cls,
+        bits: str,
+        width: object | None = None,
+        signed: bool = False,
+    ) -> "FixedWidthInteger":
+        if not isinstance(bits, str):
+            raise TypeError("bits must be text")
+        if not bits or any(bit not in "01" for bit in bits):
+            raise InvalidNumberError("bits must contain only zero and one and cannot be empty")
+        checked_width = len(bits) if width is None else validate_width(width)
+        if len(bits) > checked_width:
+            raise IntegerRangeError("bit text is longer than the selected width")
+        return cls.from_bit_pattern(int(bits, 2), checked_width, signed)
+
+
+@dataclass(frozen=True, slots=True)
+class IntegerInterpretation:
+    pattern: int
+    width: int
+
+    def __post_init__(self) -> None:
+        FixedWidthInteger.from_bit_pattern(self.pattern, self.width)
+
+    @property
+    def unsigned_value(self) -> int:
+        return self.pattern
+
+    @property
+    def signed_value(self) -> int:
+        return FixedWidthInteger.from_bit_pattern(self.pattern, self.width, signed=True).value
+
+    @property
+    def sign_bit(self) -> int:
+        return self.pattern >> (self.width - 1)
+
+    @property
+    def binary(self) -> str:
+        return format(self.pattern, f"0{self.width}b")
+
+    @property
+    def hexadecimal(self) -> str:
+        return format(self.pattern, f"0{(self.width + 3) // 4}X")
+
+
+def interpret_bit_pattern(pattern: object, width: object) -> IntegerInterpretation:
+    value = FixedWidthInteger.from_bit_pattern(pattern, width)
+    return IntegerInterpretation(value.bit_pattern, value.width)
+
+
+def parse_bit_pattern(
+    text: str,
+    base: object,
+    width: object,
+    signed: bool = False,
+) -> FixedWidthInteger:
+    pattern = parse_integer(text, base)
+    return FixedWidthInteger.from_bit_pattern(pattern.numerator, width, signed)
+
 
 def encode_twos_complement(value: object, width: object) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
@@ -139,10 +204,4 @@ def format_twos_complement(value: object, width: object) -> str:
 
 
 def parse_twos_complement(bits: str) -> FixedWidthInteger:
-    if not isinstance(bits, str):
-        raise TypeError("bits must be text")
-    if not bits:
-        raise ValueError("bits cannot be empty")
-    if any(bit not in "01" for bit in bits):
-        raise ValueError("bits can contain only zero and one")
-    return FixedWidthInteger.from_bit_pattern(int(bits, 2), len(bits), signed=True)
+    return FixedWidthInteger.from_bits(bits, signed=True)

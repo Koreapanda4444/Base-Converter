@@ -129,6 +129,20 @@ Fractional values are rejected instead of truncated. The `exact` property return
 mathematical value as an `ExactValue`. `resize` preserves that value and signedness,
 checking the destination range instead of wrapping or discarding bits.
 
+## Signed and unsigned interpretation
+
+`bit_pattern` and `bits` encode a fixed-width value without a leading minus sign.
+`reinterpret(signed=...)` preserves the width and every bit, changing only its interpretation.
+`interpret_bit_pattern` reports the unsigned value, signed two's-complement value,
+sign bit, padded binary text and uppercase hexadecimal text for the same pattern.
+
+`from_bits` uses the raw binary text length when no width is supplied. A larger explicit
+width zero-extends the pattern before signed interpretation; extra textual bits are rejected.
+Thus `11111111` is signed `-1` at eight bits, but signed `255` at sixteen bits.
+`parse_bit_pattern` reads integer digits in a specified base and then interprets the pattern.
+`from_text` instead reads a mathematical value, so signed `-1` and pattern `FF` are
+different input paths. Neither path silently wraps out-of-range input.
+
 ## Errors
 
 The core rejects:
