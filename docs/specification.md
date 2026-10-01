@@ -156,6 +156,20 @@ against their respective mathematical ranges. For example, signed eight-bit `127
 has exact result `128`, overflows, and wraps to `-128`; unsigned `255 + 1` wraps to `0`.
 Operands with different formats must be explicitly resized or reinterpreted first.
 
+## Fixed-width bitwise operations
+
+Fixed-width values support `&`, `|`, `^`, `~`, `<<` and `>>`. Binary bitwise operands
+must have the same width and signedness. Results preserve that format; NOT and left
+shift mask their result to the selected width. Operands remain immutable.
+
+For signed values, `>>` is an arithmetic shift that repeats the sign bit. For unsigned
+values it fills with zero. `logical_right_shift` always fills with zero, preserving the
+result's declared format. Shift counts must be nonnegative integers, excluding booleans.
+Counts at least the width discard all shifted bits: left and logical right shifts give
+zero, while arithmetic right shift gives `-1` for a negative signed value.
+These operations apply to `FixedWidthInteger` values; the rational expression grammar
+continues to support only its documented arithmetic operators.
+
 ## Errors
 
 The core rejects:

@@ -28,6 +28,14 @@ def integer_bounds(width: object, signed: bool = False) -> tuple[int, int]:
     return 0, (1 << checked_width) - 1
 
 
+def _validate_shift_count(count: object) -> int:
+    if isinstance(count, bool) or not isinstance(count, int):
+        raise TypeError("shift count must be an integer")
+    if count < 0:
+        raise ValueError("shift count cannot be negative")
+    return count
+
+
 @dataclass(frozen=True, slots=True)
 class FixedWidthInteger:
     value: int
@@ -142,6 +150,43 @@ class FixedWidthInteger:
         if len(bits) > checked_width:
             raise IntegerRangeError("bit text is longer than the selected width")
         return cls.from_bit_pattern(int(bits, 2), checked_width, signed)
+
+    def _require_matching(self, other: "FixedWidthInteger") -> None:
+        if not isinstance(other, FixedWidthInteger):
+            raise TypeError("operand must be a FixedWidthInteger")
+        if self.width != other.width or self.signed != other.signed:
+            raise ValueError("operands must have the same width and signedness")
+
+    def _pattern_result(self, pattern: int) -> "FixedWidthInteger":
+        return type(self).from_bit_pattern(pattern & (self.modulus - 1), self.width, self.signed)
+
+    def __and__(self, other: "FixedWidthInteger") -> "FixedWidthInteger":
+        self._require_matching(other)
+        return self._pattern_result(self.bit_pattern & other.bit_pattern)
+
+    def __or__(self, other: "FixedWidthInteger") -> "FixedWidthInteger":
+        self._require_matching(other)
+        return self._pattern_result(self.bit_pattern | other.bit_pattern)
+
+    def __xor__(self, other: "FixedWidthInteger") -> "FixedWidthInteger":
+        self._require_matching(other)
+        return self._pattern_result(self.bit_pattern ^ other.bit_pattern)
+
+    def __invert__(self) -> "FixedWidthInteger":
+        return self._pattern_result(~self.bit_pattern)
+
+    def __lshift__(self, count: object) -> "FixedWidthInteger":
+        checked_count = _validate_shift_count(count)
+        return self._pattern_result(self.bit_pattern << min(checked_count, self.width))
+
+    def __rshift__(self, count: object) -> "FixedWidthInteger":
+        checked_count = _validate_shift_count(count)
+        value = self.value >> min(checked_count, self.width)
+        return type(self)(value, self.width, self.signed)
+
+    def logical_right_shift(self, count: object) -> "FixedWidthInteger":
+        checked_count = _validate_shift_count(count)
+        return self._pattern_result(self.bit_pattern >> min(checked_count, self.width))
 
 
 @dataclass(frozen=True, slots=True)
