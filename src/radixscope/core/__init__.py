@@ -47,6 +47,12 @@ from radixscope.core.formatting import (
     format_value,
 )
 from radixscope.core.literals import parse_literal
+from radixscope.core.overflow import (
+    ArithmeticOperation,
+    RangeAnalysis,
+    analyze_arithmetic,
+    analyze_range,
+)
 from radixscope.core.parse import (
     parse_finite,
     parse_integer,
@@ -68,6 +74,7 @@ __all__ = [
     "DIGIT_ALPHABET",
     "MAX_BASE",
     "MIN_BASE",
+    "ArithmeticOperation",
     "BinaryExpression",
     "ConversionTrace",
     "ExactValue",
@@ -86,9 +93,12 @@ __all__ = [
     "LiteralExpression",
     "NonIntegerValueError",
     "RadixScopeError",
+    "RangeAnalysis",
     "RoundingMode",
     "TokenKind",
     "UnaryExpression",
+    "analyze_arithmetic",
+    "analyze_range",
     "convert_bases",
     "convert_text",
     "decode_twos_complement",

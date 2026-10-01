@@ -143,6 +143,19 @@ Thus `11111111` is signed `-1` at eight bits, but signed `255` at sixteen bits.
 `from_text` instead reads a mathematical value, so signed `-1` and pattern `FF` are
 different input paths. Neither path silently wraps out-of-range input.
 
+## Range and overflow analysis
+
+`analyze_range` preserves the mathematical integer and reports its destination bounds.
+`overflowed` indicates whether it fits. `checked` raises `IntegerRangeError` on overflow,
+while `wrapped` explicitly reduces the result modulo `2**width` and decodes its signedness.
+The exact result is never overwritten by the wrapped result.
+
+`analyze_arithmetic` analyzes addition, subtraction and multiplication of two fixed-width
+operands with identical width and signedness. Signed and unsigned overflow are detected
+against their respective mathematical ranges. For example, signed eight-bit `127 + 1`
+has exact result `128`, overflows, and wraps to `-128`; unsigned `255 + 1` wraps to `0`.
+Operands with different formats must be explicitly resized or reinterpreted first.
+
 ## Errors
 
 The core rejects:
