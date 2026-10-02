@@ -46,6 +46,13 @@ from radixscope.core.formatting import (
     format_rounded,
     format_value,
 )
+from radixscope.core.ieee754 import (
+    FloatClass,
+    IEEE754Value,
+    IEEEFormat,
+    decode_ieee754,
+    decode_ieee754_bytes,
+)
 from radixscope.core.literals import parse_literal
 from radixscope.core.overflow import (
     ArithmeticOperation,
@@ -92,7 +99,10 @@ __all__ = [
     "ExpressionNode",
     "ExpressionToken",
     "FixedWidthInteger",
+    "FloatClass",
     "FractionMultiplicationStep",
+    "IEEE754Value",
+    "IEEEFormat",
     "IntegerDivisionStep",
     "IntegerInterpretation",
     "IntegerRangeError",
@@ -114,6 +124,8 @@ __all__ = [
     "convert_text",
     "decode_ascii",
     "decode_bytes",
+    "decode_ieee754",
+    "decode_ieee754_bytes",
     "decode_twos_complement",
     "digit_char",
     "digit_value",

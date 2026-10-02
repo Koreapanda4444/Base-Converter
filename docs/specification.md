@@ -189,6 +189,29 @@ dot for every other byte without altering the underlying data. `encode_ascii` an
 `decode_ascii` are strict, lossless seven-bit ASCII codecs, including control characters;
 they reject non-ASCII text or bytes rather than substituting characters.
 
+## IEEE 754 decoding
+
+`decode_ieee754(pattern, width=64)` interprets an unsigned raw binary32 or binary64
+pattern without changing any bits. `IEEEFormat` describes the 23/52 fraction bits,
+8/11 exponent bits and 127/1023 exponent bias. Other formats are rejected.
+`decode_ieee754_bytes` requires exactly four or eight bytes with explicit byte order.
+
+The immutable `IEEE754Value` exposes sign, exponent and fraction fields, padded binary
+and hexadecimal text, and classification as zero, subnormal, normal, infinity or NaN.
+Finite `exact` values are rational, including the smallest subnormal. `significand`
+includes the implicit leading one only for normal values; `exponent` is unbiased.
+For zero and subnormal values it is the format's minimum normal exponent.
+Infinity and NaN have no rational value, significand or unbiased exponent.
+
+Signed zero retains its sign in the raw pattern even though its rational value is zero.
+NaN retains its sign, quiet bit and payload; `nan_payload` excludes the quiet bit.
+`to_bytes` preserves all raw bits and supports either endian order. `to_float` is a
+host-float convenience; use the raw pattern to preserve signaling NaNs and payloads.
+
+Format definitions follow the [Oracle numerical computation guide](https://docs.oracle.com/cd/E19422-01/819-3693/ncg_math.html).
+Decode regression tests compare seeded bit patterns against Python's IEEE-format
+[`struct` decoder](https://docs.python.org/3/library/struct.html).
+
 ## Errors
 
 The core rejects:
