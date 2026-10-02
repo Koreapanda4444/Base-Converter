@@ -212,6 +212,28 @@ Format definitions follow the [Oracle numerical computation guide](https://docs.
 Decode regression tests compare seeded bit patterns against Python's IEEE-format
 [`struct` decoder](https://docs.python.org/3/library/struct.html).
 
+## IEEE 754 encoding
+
+`encode_ieee754(value, width=64)` accepts `ExactValue`, integer or host float and returns
+an `IEEE754Value`. Rational and integer inputs round directly into the destination format
+without first converting to a host float. Host floats contribute their actual binary value;
+use `ExactValue` and the numeric parser for exact decimal input.
+
+Rounding is round to nearest, ties to even. It covers significand carries, gradual underflow,
+the subnormal-to-normal transition and overflow to signed infinity. Values smaller than
+half the minimum subnormal round to signed zero. At the halfway value, zero is the even
+choice. The halfway overflow threshold rounds to infinity.
+
+Host `-0.0` retains its sign. Rational zero has no sign, so `negative_zero=True` explicitly
+creates negative zero and is rejected for nonzero inputs. Host infinities retain their sign;
+host NaNs become canonical quiet NaNs with their sign preserved.
+
+`encode_ieee754_special` explicitly constructs zero, infinity or NaN with a zero-or-one
+`sign_bit`. NaN's `payload` excludes its leading quiet bit, and `quiet=False` constructs
+a signaling NaN only when the payload is nonzero. Payloads must fit the chosen format;
+they are rejected instead of truncated. Non-NaN special values cannot carry a payload.
+Raw decoding and byte serialization remain the lossless path for existing NaN patterns.
+
 ## Errors
 
 The core rejects:

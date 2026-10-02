@@ -52,6 +52,8 @@ from radixscope.core.ieee754 import (
     IEEEFormat,
     decode_ieee754,
     decode_ieee754_bytes,
+    encode_ieee754,
+    encode_ieee754_special,
 )
 from radixscope.core.literals import parse_literal
 from radixscope.core.overflow import (
@@ -131,6 +133,8 @@ __all__ = [
     "digit_value",
     "encode_ascii",
     "encode_bytes",
+    "encode_ieee754",
+    "encode_ieee754_special",
     "encode_twos_complement",
     "evaluate_expression",
     "evaluate_parsed_expression",

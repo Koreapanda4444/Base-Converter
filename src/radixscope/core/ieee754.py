@@ -1,3 +1,4 @@
+import math
 import struct
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
@@ -139,3 +140,114 @@ def decode_ieee754_bytes(
     checked_format = _validate_format(width)
     value = decode_bytes(data, byteorder, width=checked_format.value)
     return IEEE754Value(value.bit_pattern, checked_format)
+
+
+def encode_ieee754_special(
+    classification: object,
+    width: object = IEEEFormat.BINARY64,
+    *,
+    sign_bit: object = 0,
+    payload: object = 0,
+    quiet: bool = True,
+) -> IEEE754Value:
+    checked_format = _validate_format(width)
+    if not isinstance(classification, str):
+        raise TypeError("classification must be zero, infinity or nan")
+    kind = FloatClass(classification)
+    if kind not in (FloatClass.ZERO, FloatClass.INFINITY, FloatClass.NAN):
+        raise ValueError("classification must be zero, infinity or nan")
+    if isinstance(sign_bit, bool) or not isinstance(sign_bit, int):
+        raise TypeError("sign bit must be an integer")
+    if sign_bit not in (0, 1):
+        raise ValueError("sign bit must be zero or one")
+    if isinstance(payload, bool) or not isinstance(payload, int):
+        raise TypeError("payload must be an integer")
+    quiet_bit = 1 << (checked_format.fraction_width - 1)
+    if not 0 <= payload < quiet_bit:
+        raise ValueError("payload does not fit below the quiet bit")
+    if not isinstance(quiet, bool):
+        raise TypeError("quiet must be a boolean")
+    if kind is not FloatClass.NAN and payload:
+        raise ValueError("only NaN has a payload")
+    pattern = sign_bit << (checked_format.value - 1)
+    if kind is not FloatClass.ZERO:
+        pattern |= ((1 << checked_format.exponent_width) - 1) << checked_format.fraction_width
+    if kind is FloatClass.NAN:
+        if not quiet and payload == 0:
+            raise ValueError("signaling NaN requires a nonzero payload")
+        pattern |= payload | (quiet_bit if quiet else 0)
+    return IEEE754Value(pattern, checked_format)
+
+
+def _round_scaled_ratio(numerator: int, denominator: int, exponent: int) -> int:
+    if exponent >= 0:
+        denominator <<= exponent
+    else:
+        numerator <<= -exponent
+    quotient, remainder = divmod(numerator, denominator)
+    twice_remainder = remainder * 2
+    increment = twice_remainder > denominator or (
+        twice_remainder == denominator and quotient % 2 == 1
+    )
+    return quotient + int(increment)
+
+
+def _encode_finite(value: ExactValue, format_: IEEEFormat, sign_bit: int) -> IEEE754Value:
+    numerator = abs(value.numerator)
+    denominator = value.denominator
+    sign_pattern = sign_bit << (format_.value - 1)
+    if numerator == 0:
+        return IEEE754Value(sign_pattern, format_)
+    exponent = numerator.bit_length() - denominator.bit_length()
+    if exponent >= 0:
+        below_power = numerator < denominator << exponent
+    else:
+        below_power = numerator << -exponent < denominator
+    if below_power:
+        exponent -= 1
+    minimum_exponent = 1 - format_.bias
+    if exponent > format_.bias:
+        return encode_ieee754_special(FloatClass.INFINITY, format_, sign_bit=sign_bit)
+    if exponent < minimum_exponent:
+        fraction = _round_scaled_ratio(
+            numerator, denominator, minimum_exponent - format_.fraction_width
+        )
+        return IEEE754Value(sign_pattern | fraction, format_)
+    significand = _round_scaled_ratio(numerator, denominator, exponent - format_.fraction_width)
+    if significand == 1 << (format_.fraction_width + 1):
+        significand >>= 1
+        exponent += 1
+    if exponent > format_.bias:
+        return encode_ieee754_special(FloatClass.INFINITY, format_, sign_bit=sign_bit)
+    exponent_pattern = (exponent + format_.bias) << format_.fraction_width
+    fraction = significand - (1 << format_.fraction_width)
+    return IEEE754Value(sign_pattern | exponent_pattern | fraction, format_)
+
+
+def encode_ieee754(
+    value: ExactValue | int | float,
+    width: object = IEEEFormat.BINARY64,
+    *,
+    negative_zero: bool = False,
+) -> IEEE754Value:
+    checked_format = _validate_format(width)
+    if not isinstance(negative_zero, bool):
+        raise TypeError("negative_zero must be a boolean")
+    if isinstance(value, bool) or not isinstance(value, (ExactValue, int, float)):
+        raise TypeError("value must be an ExactValue, integer or float")
+    if isinstance(value, float):
+        sign_bit = int(math.copysign(1, value) < 0)
+        if not math.isfinite(value):
+            if negative_zero:
+                raise ValueError("negative_zero requires a zero value")
+            kind = FloatClass.NAN if math.isnan(value) else FloatClass.INFINITY
+            return encode_ieee754_special(kind, checked_format, sign_bit=sign_bit)
+        exact = ExactValue(*value.as_integer_ratio())
+    else:
+        exact = value if isinstance(value, ExactValue) else ExactValue(value)
+        sign_bit = int(exact.numerator < 0)
+    if negative_zero:
+        if exact.numerator:
+            raise ValueError("negative_zero requires a zero value")
+        sign_bit = 1
+    return _encode_finite(exact, checked_format, sign_bit)
