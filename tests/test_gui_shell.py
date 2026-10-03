@@ -1,16 +1,6 @@
-import os
-
-import pytest
 from PySide6.QtWidgets import QApplication
 
 from radixscope.gui.app import MainWindow, create_application
-
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
-
-@pytest.fixture(scope="module")
-def qt_app() -> QApplication:
-    return create_application()
 
 
 def test_desktop_shell_has_four_accessible_workspaces(qt_app: QApplication) -> None:

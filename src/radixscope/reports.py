@@ -57,6 +57,7 @@ def trace_report(trace: ConversionTrace) -> dict[str, object]:
         "sign": trace.sign,
         "result": trace.result,
         "terminates": trace.terminates,
+        "complete": trace.complete,
         "recurring_start": trace.recurring_start,
         "integer_steps": [asdict(step) for step in trace.integer_steps],
         "fractional_steps": [asdict(step) for step in trace.fractional_steps],

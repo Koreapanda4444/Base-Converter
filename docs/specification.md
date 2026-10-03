@@ -117,6 +117,12 @@ Zero to a negative power and division by zero are invalid. Zero to the zeroth po
 Errors identify the operator or token position; excessive nesting raises a domain error.
 Variable names, assignments, function calls and implicit multiplication are not supported.
 
+Desktop conversion displays at most 1000 fractional digits in exact mode and labels partial
+expansions with an ellipsis and the affected bases. The trace workspace has an adjustable
+step limit. `trace_value(..., max_steps=...)` preserves the original rational value and sets
+`complete=False` when that limit is reached before termination or recurrence is established.
+The core's default remains unlimited; partial traces never claim to terminate.
+
 ## Fixed-width integer model
 
 `FixedWidthInteger(value, width, signed=False)` stores an immutable integer with an explicit

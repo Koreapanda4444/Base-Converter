@@ -35,10 +35,11 @@ class ConversionTrace:
     fractional_steps: tuple[FractionMultiplicationStep, ...]
     recurring_start: int | None
     result: str
+    complete: bool = True
 
     @property
     def terminates(self) -> bool:
-        return self.recurring_start is None
+        return self.complete and self.recurring_start is None
 
 
 def _trace_integer(number: int, base: int) -> tuple[IntegerDivisionStep, ...]:
@@ -65,12 +66,15 @@ def _trace_fraction(
     remainder: int,
     denominator: int,
     base: int,
-) -> tuple[tuple[FractionMultiplicationStep, ...], int | None]:
+    max_steps: int | None,
+) -> tuple[tuple[FractionMultiplicationStep, ...], int | None, bool]:
     positions: dict[int, int] = {}
     steps: list[FractionMultiplicationStep] = []
     while remainder:
         if remainder in positions:
-            return tuple(steps), positions[remainder]
+            return tuple(steps), positions[remainder], True
+        if max_steps is not None and len(steps) >= max_steps:
+            return tuple(steps), None, False
         positions[remainder] = len(steps)
         product = remainder * base
         value, next_remainder = divmod(product, denominator)
@@ -86,20 +90,34 @@ def _trace_fraction(
             )
         )
         remainder = next_remainder
-    return tuple(steps), None
+    return tuple(steps), None, True
 
 
-def trace_value(value: ExactValue, base: object) -> ConversionTrace:
+def trace_value(
+    value: ExactValue, base: object, *, max_steps: int | None = None
+) -> ConversionTrace:
     checked_base = validate_base(base)
     if not isinstance(value, ExactValue):
         raise TypeError("value must be an ExactValue")
+    if max_steps is not None and (
+        isinstance(max_steps, bool) or not isinstance(max_steps, int) or max_steps < 1
+    ):
+        raise ValueError("max_steps must be a positive integer")
     absolute_numerator = abs(value.numerator)
     integer_part, remainder = divmod(absolute_numerator, value.denominator)
-    fractional_steps, recurring_start = _trace_fraction(
+    fractional_steps, recurring_start, complete = _trace_fraction(
         remainder,
         value.denominator,
         checked_base,
+        max_steps,
     )
+    if complete:
+        result = format_exact(value, checked_base)
+    else:
+        integer_text = format_exact(ExactValue(integer_part), checked_base)
+        digits = "".join(step.digit for step in fractional_steps)
+        prefix = "-" if value.sign < 0 else ""
+        result = f"{prefix}{integer_text}.{digits}\u2026"
     return ConversionTrace(
         value,
         checked_base,
@@ -107,7 +125,8 @@ def trace_value(value: ExactValue, base: object) -> ConversionTrace:
         _trace_integer(integer_part, checked_base),
         fractional_steps,
         recurring_start,
-        format_exact(value, checked_base),
+        result,
+        complete,
     )
 
 
