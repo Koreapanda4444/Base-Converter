@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget
 
 from radixscope import __version__
 from radixscope.gui.conversion import ConversionWorkspace, TraceWorkspace
+from radixscope.gui.programmer import IEEEWorkspace, ProgrammerWorkspace
 from radixscope.gui.widgets import Workspace
 
 
@@ -20,8 +21,8 @@ class MainWindow(QMainWindow):
         self.workspaces: list[Workspace] = [
             ConversionWorkspace(),
             TraceWorkspace(),
-            Workspace("Programmer", "Fixed-width integers, two's complement and bit operations"),
-            Workspace("IEEE 754", "Inspect binary32 and binary64 fields and raw bits"),
+            ProgrammerWorkspace(),
+            IEEEWorkspace(),
         ]
         for index, workspace in enumerate(self.workspaces):
             self.tabs.addTab(workspace, workspace.title)

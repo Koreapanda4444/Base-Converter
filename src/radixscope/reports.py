@@ -38,6 +38,11 @@ def ieee_report(value: IEEE754Value, byteorder: str = "big") -> dict[str, object
         "sign": value.sign_bit,
         "exponent_bits": value.exponent_bits,
         "fraction_bits": value.fraction_bits,
+        "field_bits": {
+            "sign": str(value.sign_bit),
+            "exponent": format(value.exponent_bits, f"0{value.format.exponent_width}b"),
+            "fraction": format(value.fraction_bits, f"0{value.format.fraction_width}b"),
+        },
         "exponent": value.exponent,
         "significand": str(significand) if significand is not None else None,
         "exact": str(exact) if exact is not None else None,
