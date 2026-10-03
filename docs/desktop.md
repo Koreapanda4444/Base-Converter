@@ -1,5 +1,7 @@
 # Desktop application
 
+English | [한국어](ko/desktop.md)
+
 Start with `radixscope-gui` or `python -m radixscope.gui`. Use Ctrl+1 through Ctrl+4
 to switch workspaces. Enter in the main input field runs the calculation. Results can be
 selected or copied with **Copy result**. Invalid input clears the previous result

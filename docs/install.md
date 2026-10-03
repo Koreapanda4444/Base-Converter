@@ -1,5 +1,7 @@
 # Installation
 
+English | [한국어](ko/install.md)
+
 ## From a checkout
 
 ```sh

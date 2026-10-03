@@ -1,5 +1,7 @@
 # RadixScope
 
+English | [한국어](README.ko.md)
+
 RadixScope 2.0.0 converts exact numbers between bases 2 through 36 and inspects the
 bits behind fixed-width integers and IEEE 754 floating-point values. It provides a
 command line interface and a PySide6 desktop application.

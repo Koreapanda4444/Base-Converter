@@ -1,5 +1,7 @@
 # Command line
 
+English | [한국어](ko/cli.md)
+
 Install the project with `python -m pip install .`, then use `radixscope` or
 `python -m radixscope`. Every command supports `--help` and `--json`.
 

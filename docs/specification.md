@@ -1,5 +1,7 @@
 # RadixScope v2 specification
 
+English | [한국어](ko/specification.md)
+
 ## Core rules
 
 - Supported bases are 2 through 36.
