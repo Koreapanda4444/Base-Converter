@@ -2,11 +2,15 @@ from PySide6.QtCore import Signal
 from PySide6.QtGui import QFontDatabase
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
+    QComboBox,
     QFormLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPlainTextEdit,
     QPushButton,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -59,3 +63,32 @@ class Workspace(QWidget):
 
     def copy_result(self) -> None:
         QApplication.clipboard().setText(self.output.toPlainText())
+
+    def snapshot(self) -> dict[str, object]:
+        state: dict[str, object] = {}
+        for name, widget in vars(self).items():
+            if isinstance(widget, QLineEdit):
+                state[name] = widget.text()
+            elif isinstance(widget, QCheckBox):
+                state[name] = widget.isChecked()
+            elif isinstance(widget, QSpinBox):
+                state[name] = widget.value()
+            elif isinstance(widget, QComboBox):
+                state[name] = widget.currentText()
+        return state
+
+    def restore_state(self, state: dict[str, object]) -> None:
+        for name, value in state.items():
+            widget = vars(self).get(name)
+            if isinstance(widget, QLineEdit) and isinstance(value, str):
+                widget.setText(value)
+            elif isinstance(widget, QCheckBox) and isinstance(value, bool):
+                widget.setChecked(value)
+            elif isinstance(widget, QComboBox) and isinstance(value, str):
+                if widget.findText(value) >= 0:
+                    widget.setCurrentText(value)
+            elif (
+                isinstance(widget, QSpinBox) and isinstance(value, int)
+                and not isinstance(value, bool) and widget.minimum() <= value <= widget.maximum()
+            ):
+                widget.setValue(value)

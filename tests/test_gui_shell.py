@@ -1,10 +1,13 @@
+from pathlib import Path
+
 from PySide6.QtWidgets import QApplication
 
 from radixscope.gui.app import MainWindow, create_application
+from radixscope.settings import SettingsStore
 
 
-def test_desktop_shell_has_four_accessible_workspaces(qt_app: QApplication) -> None:
-    window = MainWindow()
+def test_desktop_shell_has_four_accessible_workspaces(qt_app: QApplication, tmp_path: Path) -> None:
+    window = MainWindow(SettingsStore(tmp_path / "state.json"))
     window.show()
     qt_app.processEvents()
     assert window.isVisible()
@@ -18,8 +21,8 @@ def test_desktop_shell_has_four_accessible_workspaces(qt_app: QApplication) -> N
     window.close()
 
 
-def test_result_error_and_clipboard_flow(qt_app: QApplication) -> None:
-    window = MainWindow()
+def test_result_error_and_clipboard_flow(qt_app: QApplication, tmp_path: Path) -> None:
+    window = MainWindow(SettingsStore(tmp_path / "state.json"))
     workspace = window.workspaces[0]
     workspace.set_result({"exact": "255", "outputs": {"16": "FF"}})
     assert "FF" in workspace.output.toPlainText()
