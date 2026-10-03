@@ -21,6 +21,9 @@ classifiers = [
     "Typing :: Typed",
 ]
 
+[project.scripts]
+radixscope = "radixscope.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "mypy>=1.13,<2",

@@ -1,0 +1,77 @@
+import json
+from dataclasses import asdict
+
+from radixscope.core import (
+    ConversionTrace,
+    FixedWidthInteger,
+    IEEE754Value,
+    interpret_bit_pattern,
+    represent_bytes,
+)
+
+
+def integer_report(value: FixedWidthInteger, byteorder: str = "big") -> dict[str, object]:
+    interpretation = interpret_bit_pattern(value.bit_pattern, value.width)
+    data = represent_bytes(value, byteorder)
+    return {
+        "value": value.value,
+        "width": value.width,
+        "signed": value.signed,
+        "minimum": value.minimum,
+        "maximum": value.maximum,
+        "unsigned": interpretation.unsigned_value,
+        "twos_complement": interpretation.signed_value,
+        "bits": value.bits,
+        "hexadecimal": interpretation.hexadecimal,
+        "byteorder": byteorder,
+        "bytes": data.hexadecimal,
+        "ascii": data.ascii_preview,
+    }
+
+
+def ieee_report(value: IEEE754Value, byteorder: str = "big") -> dict[str, object]:
+    exact = value.exact
+    significand = value.significand
+    return {
+        "width": value.format.value,
+        "classification": value.classification.value,
+        "sign": value.sign_bit,
+        "exponent_bits": value.exponent_bits,
+        "fraction_bits": value.fraction_bits,
+        "exponent": value.exponent,
+        "significand": str(significand) if significand is not None else None,
+        "exact": str(exact) if exact is not None else None,
+        "bits": value.bits,
+        "hexadecimal": value.hexadecimal,
+        "quiet_nan": value.is_quiet_nan,
+        "nan_payload": value.nan_payload,
+        "byteorder": byteorder,
+        "bytes": value.to_bytes(byteorder).hex(" ").upper(),
+    }
+
+
+def trace_report(trace: ConversionTrace) -> dict[str, object]:
+    return {
+        "exact": str(trace.value),
+        "base": trace.base,
+        "sign": trace.sign,
+        "result": trace.result,
+        "terminates": trace.terminates,
+        "recurring_start": trace.recurring_start,
+        "integer_steps": [asdict(step) for step in trace.integer_steps],
+        "fractional_steps": [asdict(step) for step in trace.fractional_steps],
+    }
+
+
+def render_report(report: dict[str, object]) -> str:
+    lines: list[str] = []
+    for key, value in report.items():
+        if isinstance(value, dict):
+            lines.append(f"{key}:")
+            lines.extend(f"  {name}: {item}" for name, item in value.items())
+        elif isinstance(value, list):
+            lines.append(f"{key}:")
+            lines.extend(f"  {json.dumps(item, ensure_ascii=False)}" for item in value)
+        else:
+            lines.append(f"{key}: {value}")
+    return "\n".join(lines)
