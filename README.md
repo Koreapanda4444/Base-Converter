@@ -1,21 +1,84 @@
 # RadixScope
 
-RadixScope is an exact radix conversion and number-representation toolkit.
+RadixScope 2.0.0 converts exact numbers between bases 2 through 36 and inspects the
+bits behind fixed-width integers and IEEE 754 floating-point values. It provides a
+command line interface and a PySide6 desktop application.
 
-The project is being rebuilt from scratch. The previous implementation has been removed so the new core can be developed from a clean, tested foundation.
+## Install and run
 
-## Planned scope
+Python 3.11 or newer is required. From a checkout of this repository:
 
-- Exact conversion between bases 2 through 36
-- Integer, fraction, and repeating-fraction notation
-- Multi-base output and step-by-step conversion traces
-- Exact mixed-base expressions
-- Fixed-width signed and unsigned integers
-- Two's complement, bitwise operations, and overflow analysis
-- Big-endian and little-endian byte representations
-- IEEE 754 binary32 and binary64 inspection
-- Command-line and PySide6 desktop interfaces
+```sh
+python -m pip install ".[gui]"
+python -m radixscope.gui
+```
 
-## Status
+For the command line and Python API alone, install with `python -m pip install .`.
+The installed commands are `radixscope` and `radixscope-gui`.
+On Windows, `py` can replace `python` in these commands.
 
-Rewrite in progress. No usable release is available yet.
+```sh
+radixscope convert FF --from 16 --to 2 8 10 16
+radixscope expression "0x10 + 2#11 / 10#2" --to 2 10 16
+radixscope trace "1/3" --to 2 --json
+radixscope integer 127 --width 8 --signed --op add --operand 1 --json
+radixscope ieee encode "1/10" --width 32
+radixscope ieee decode 3F800000 --width 32
+```
+
+Wheel and source packages are attached as artifacts to successful [Quality workflow runs](https://github.com/Koreapanda4444/radixscope/actions/workflows/quality.yml).
+See the [installation guide](docs/install.md) for package installation and Linux desktop dependencies.
+
+## Features
+
+- Exact integers, finite fractions, ratios and recurring digits such as `0.(3)`
+- Multiple output bases, explicit precision and five rounding modes
+- Mixed-base expressions with `base#digits`, `0b`, `0o`, `0x` and exact arithmetic
+- Integer division and fractional multiplication traces, including cycle detection
+- Arbitrary-width signed and unsigned integers, two's complement and bitwise operations
+- Range and overflow analysis with separate exact and wrapped results
+- Big-endian and little-endian bytes, strict ASCII codecs and printable previews
+- Binary32 and binary64 encoding and decoding, including subnormals, signed zero and NaNs
+- Four desktop workspaces, clipboard output, themes, saved options and bounded recent history
+
+IEEE encoding rounds exact rational inputs directly using nearest, ties to even.
+Raw decoding preserves NaN payloads and signaling bits. A host Python float already contains
+a rounded binary value; use exact numeric input when decimal precision matters.
+
+## Python API
+
+```python
+from radixscope.core import ExactValue, convert_bases, encode_ieee754, evaluate_expression
+
+value = evaluate_expression("0x10 + 2#11 / 10#2")
+print(convert_bases(value, [2, 10, 16]))
+print(encode_ieee754(ExactValue(1, 10), 32).hexadecimal)
+```
+
+## Documentation
+
+- [Command line](docs/cli.md)
+- [Desktop application](docs/desktop.md)
+- [Numeric specification](docs/specification.md)
+- [2.0.0 release notes](docs/releases/2.0.0.md)
+
+Exact expansions can have long periods. CLI exact output is unlimited; choose `--precision`
+for a bounded expansion. Desktop exact conversion displays at most 1000 fractional digits
+and marks incomplete output explicitly. The trace workspace offers an adjustable limit.
+Expression evaluation and integer operations use arbitrary-size integers; very large powers
+or inputs can take substantial time and memory.
+
+## Development
+
+```sh
+python -m pip install -e ".[dev]"
+python -m ruff check src tests scripts
+python -m mypy src tests scripts
+python -m pytest --cov=radixscope --cov-report=term-missing
+python -m build
+python scripts/verify_distribution.py
+```
+
+Tests run on Ubuntu and Windows with Python 3.11, 3.12 and 3.13. Qt tests use the
+offscreen platform. Quality runs build a wheel and source archive, verify an isolated
+installation and retain the packages as workflow artifacts. No PyPI publishing is configured.
